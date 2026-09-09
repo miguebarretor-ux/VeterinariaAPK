@@ -1,0 +1,136 @@
+/*
+ * ╔═══════════════════════════════════════════════════════════════╗
+ * ║   HUELLITAS VETERINARIA — Tokens de identidad visual         ║
+ * ║   Lenguaje: Claymorphism · Pasteles complementarios          ║
+ * ║                                                               ║
+ * ║   Este archivo es la fuente de verdad de los tokens.         ║
+ * ║   La traducción a Flutter está en: huellitas_theme.dart      ║
+ * ╚═══════════════════════════════════════════════════════════════╝
+ */
+
+:root {
+
+  /* ─── TIPOGRAFÍA ──────────────────────────────────────────── */
+
+  --font-display: 'Bitter', Georgia, serif;    /* títulos, grandes */
+  --font-body:    'Nunito', system-ui, sans-serif; /* texto corrido */
+
+  /* Escala tipográfica de la app */
+  --text-display:  800 40px/1.1 var(--font-display);  /* Hola, Sofía  */
+  --text-title:    700 28px/1.2 var(--font-display);  /* Próxima cita */
+  --text-subtitle: 600 20px/1.3 var(--font-display);  /* Carnet al día */
+  --text-body:     400 17px/1.6 var(--font-body);     /* Texto corrido */
+  --text-label:    700 15px/1   var(--font-body);     /* Botones       */
+  --text-micro:    700 12px/1   var(--font-body);     /* Chips, caps   */
+
+
+  /* ─── PALETA PRINCIPAL ────────────────────────────────────── */
+
+  --color-lavanda:  #C9BCEB;   /* Primario · calma, superficies       */
+  --color-lima:     #E5E9A8;   /* Secundario · acción, confirmaciones */
+  --color-ink:      #3A3350;   /* Texto · nunca negro puro            */
+  --color-ink-soft: #6E6688;   /* Texto secundario, labels            */
+
+
+  /* ─── PALETA DE SOPORTE ───────────────────────────────────── */
+
+  --color-arena: #F7F3EE;   /* Fondo de pantalla                 */
+  --color-leche: #FFFDFA;   /* Fondo de tarjetas y campos        */
+  --color-coral: #F49E8C;   /* Alertas, errores (máx 1 por vista)*/
+  --color-menta: #A9D9C6;   /* Éxito, estado "al día"            */
+
+
+  /* ─── RADIOS ──────────────────────────────────────────────── */
+
+  --radius-chip:   999px;  /* Chips, pills, tags           */
+  --radius-field:   22px;  /* Campos de texto, controles   */
+  --radius-button:  24px;  /* Botones de acción            */
+  --radius-card:    44px;  /* Tarjetas, paneles            */
+  --radius-modal:   52px;  /* Modales, hero cards          */
+
+
+  /* ─── SOMBRAS CLAYMORPHISM ────────────────────────────────── */
+  /*
+   * Regla: una sola fuente de luz arriba-izquierda.
+   * Nunca más de 3 niveles por pantalla.
+   * No usar sombras negras > 16% de opacidad.
+   */
+
+  /* Nivel 0 — Hundido (campos, tracks de slider) */
+  --shadow-clay-in:
+    inset  7px   8px 16px rgba(58, 51, 80, 0.14),
+    inset -5px  -6px 12px rgba(255, 255, 255, 0.90);
+
+  /* Nivel 1 — Chips, iconos */
+  --shadow-clay-sm:
+     7px   8px 16px rgba(58, 51, 80, 0.12),
+    -4px  -5px 12px rgba(255, 255, 255, 0.90),
+    inset  3px  3px  7px rgba(255, 255, 255, 0.80),
+    inset -4px -5px 10px rgba(58, 51, 80, 0.06);
+
+  /* Nivel 2 — Tarjetas (uso general) */
+  --shadow-clay:
+    14px  16px 30px rgba(58, 51, 80, 0.13),
+    -8px -10px 22px rgba(255, 255, 255, 0.90),
+    inset  5px  5px 12px rgba(255, 255, 255, 0.75),
+    inset -8px -10px 18px rgba(58, 51, 80, 0.07);
+
+  /* Nivel 3 — Modales, hero (máximo por pantalla) */
+  --shadow-clay-xl:
+    22px  26px 48px rgba(58, 51, 80, 0.16),
+   -12px -14px 32px rgba(255, 255, 255, 0.95),
+    inset  6px  6px 16px rgba(255, 255, 255, 0.70),
+    inset -12px -14px 26px rgba(58, 51, 80, 0.07);
+
+
+  /* ─── ESPACIADO ───────────────────────────────────────────── */
+
+  --space-4:   4px;
+  --space-8:   8px;
+  --space-12: 12px;
+  --space-16: 16px;
+  --space-24: 24px;
+  --space-32: 32px;
+  --space-48: 48px;
+  --space-96: 96px;
+
+
+  /* ─── COMPONENTES ─────────────────────────────────────────── */
+
+  --button-height:      52px;   /* mínimo obligatorio          */
+  --field-padding:      18px 24px;
+  --icon-chip-size:     84px;
+  --nav-item-padding:   14px 0;
+}
+
+
+/* ════════════════════════════════════════════════════════════════
+   TABLA DE CONVERSIÓN WEB → FLUTTER
+   ════════════════════════════════════════════════════════════════
+
+   CSS                         Flutter (huellitas_theme.dart)
+   ─────────────────────────── ────────────────────────────────────
+   --color-ink      #3A3350    HuellitasTheme.ink      0xFF3A3350
+   --color-ink-soft #6E6688    HuellitasTheme.inkSoft  0xFF6E6688
+   --color-arena    #F7F3EE    HuellitasTheme.arena    0xFFF7F3EE
+   --color-leche    #FFFDFA    HuellitasTheme.leche    0xFFFFFDFA
+   --color-lavanda  #C9BCEB    HuellitasTheme.lavanda  0xFFC9BCEB
+   --color-lima     #E5E9A8    HuellitasTheme.lima     0xFFE5E9A8
+   --color-coral    #F49E8C    HuellitasTheme.coral    0xFFF49E8C
+   --color-menta    #A9D9C6    HuellitasTheme.menta    0xFFA9D9C6
+
+   --shadow-clay-in            HuellitasTheme.clayIn   (BlurStyle.inner)
+   --shadow-clay-sm            HuellitasTheme.claySm
+   --shadow-clay               HuellitasTheme.clay
+   --shadow-clay-xl            HuellitasTheme.clayXl
+
+   border-radius: 22px         BorderRadius.circular(22)
+   border-radius: 24px         BorderRadius.circular(24)
+   border-radius: 44px         BorderRadius.circular(44)
+   border-radius: 999px        BorderRadius.circular(999) o StadiumBorder
+
+   font-family: 'Bitter'       Requiere paquete google_fonts:
+                                GoogleFonts.bitter(...)
+   font-family: 'Nunito'       GoogleFonts.nunito(...)
+
+   ════════════════════════════════════════════════════════════════ */
