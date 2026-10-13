@@ -1,7 +1,14 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
-import 'registro.dart';
+import 'firebase_options.dart';
+import 'huellitas_theme.dart';
+import 'login.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
   runApp(const HuellitasApp());
 }
 
@@ -10,10 +17,11 @@ class HuellitasApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
+    return MaterialApp(
       title: 'Huellitas Veterinaria',
       debugShowCheckedModeBanner: false,
-      home: FormularioRegistroPage(),
+      theme: HuellitasTheme.theme,
+      home: const IniciarSesionPage(),
     );
   }
 }

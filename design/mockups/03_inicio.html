@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Inicio - Veterinaria</title>
+</head>
+<body>
+
+  <header>
+    <p>9:41</p>
+    <p>Buenos días,</p>
+    <h1 id="nombreUsuario">Usuario</h1>
+  </header>
+
+  <!-- Tarjeta Mascota -->
+  <section id="tarjetaMascota">
+    <div style="border: 1px solid #ccc; padding: 10px; margin-bottom: 15px;">
+      <h3 id="nombreMascota">Mascota</h3>
+      <p id="detallesMascota">Raza · Edad</p>
+    </div>
+  </section>
+
+  <!-- Botones de Acceso Rápido -->
+  <nav>
+    <a href="Untitled-4.html"><button>Citas</button></a>
+    <a href="Untitled-5.html"><button>Carnet</button></a>
+    <button>Tele</button>
+  </nav>
+
+  <!-- Próxima Cita -->
+  <section style="margin-top: 20px; border: 1px solid #ccc; padding: 10px;">
+    <h3>PRÓXIMA CITA</h3>
+    <h4 id="servicioProximo">Sin citas agendadas</h4>
+    <p id="fechaHoraProxima">--</p>
+    <button id="btnConfirmarCita" style="display: none;" onclick="alert('Cita confirmada')">Confirmar</button>
+  </section>
+
+  <!-- Navegación inferior -->
+  <footer style="margin-top: 30px;">
+    <a href="Untitled-3.html">Inicio</a> | 
+    <a href="Untitled-4.html">Citas</a> | 
+    <a href="Untitled-5.html">Carnet</a> | 
+    <button id="btnCerrarSesion">Cerrar Sesión</button>
+  </footer>
+
+  <script>
+    const usuarioSesion = JSON.parse(localStorage.getItem('usuarioSesion'));
+
+    if (!usuarioSesion) {
+      window.location.href = 'Untitled-2.html';
+    } else {
+      document.getElementById('nombreUsuario').innerText = usuarioSesion.nombre;
+
+      if (usuarioSesion.tieneMascota === 'si' && usuarioSesion.mascota) {
+        document.getElementById('nombreMascota').innerText = usuarioSesion.mascota.nombre || "Mascota";
+        const raza = usuarioSesion.mascota.raza ? usuarioSesion.mascota.raza : "Sin raza especificada";
+        const edad = usuarioSesion.mascota.edad ? `${usuarioSesion.mascota.edad} años` : "";
+        document.getElementById('detallesMascota').innerText = `${raza} ${edad ? '· ' + edad : ''}`;
+      } else {
+        document.getElementById('nombreMascota').innerText = "Sin Mascota";
+        document.getElementById('detallesMascota').innerText = "No tienes mascota registrada.";
+      }
+
+      // Cargar próxima cita
+      const citas = JSON.parse(localStorage.getItem('citas_' + usuarioSesion.correo) || '[]');
+      if (citas.length > 0) {
+        const ultimaCita = citas[citas.length - 1];
+        document.getElementById('servicioProximo').innerText = ultimaCita.servicio;
+        document.getElementById('fechaHoraProxima').innerText = `${ultimaCita.fecha} - ${ultimaCita.hora}`;
+        document.getElementById('btnConfirmarCita').style.display = 'inline-block';
+      }
+    }
+
+    document.getElementById('btnCerrarSesion').addEventListener('click', function() {
+      localStorage.removeItem('usuarioSesion');
+      window.location.href = 'Untitled-2.html';
+    });
+  </script>
+</body>
+</html>

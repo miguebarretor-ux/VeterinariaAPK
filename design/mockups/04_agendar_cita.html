@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Agendar Cita - Veterinaria</title>
+</head>
+<body>
+
+  <h2>Agendar cita</h2>
+
+  <form id="formCita">
+    <div>
+      <label>MASCOTA:</label><br>
+      <input type="text" id="mascotaCita" readonly>
+    </div>
+    <br>
+    <div>
+      <label for="servicio">SERVICIO:</label><br>
+      <select id="servicio" required>
+        <option value="Control de rutina">Control de rutina</option>
+        <option value="Vacunación">Vacunación</option>
+        <option value="Consulta General">Consulta General</option>
+        <option value="Peluquería">Peluquería</option>
+      </select>
+    </div>
+    <br>
+    <div>
+      <label for="fecha">FECHA:</label><br>
+      <input type="date" id="fecha" required>
+    </div>
+    <br>
+    <div>
+      <label for="hora">HORA:</label><br>
+      <select id="hora" required>
+        <option value="09:00">9:00 AM</option>
+        <option value="10:30">10:30 AM</option>
+        <option value="12:00">12:00 PM</option>
+        <option value="15:00">3:00 PM</option>
+      </select>
+    </div>
+    <br>
+    <button type="submit">Reservar Cita</button>
+  </form>
+
+  <br>
+  <a href="Untitled-3.html">Volver al Inicio</a>
+
+  <script>
+    const usuarioSesion = JSON.parse(localStorage.getItem('usuarioSesion'));
+    if (!usuarioSesion) window.location.href = 'Untitled-2.html';
+
+    const nombreMascota = (usuarioSesion.mascota && usuarioSesion.mascota.nombre) ? usuarioSesion.mascota.nombre : "Mascota";
+    document.getElementById('mascotaCita').value = nombreMascota;
+
+    document.getElementById('formCita').addEventListener('submit', function(e) {
+      e.preventDefault();
+
+      const nuevaCita = {
+        mascota: nombreMascota,
+        servicio: document.getElementById('servicio').value,
+        fecha: document.getElementById('fecha').value,
+        hora: document.getElementById('hora').value
+      };
+
+      const key = 'citas_' + usuarioSesion.correo;
+      const citas = JSON.parse(localStorage.getItem(key) || '[]');
+      citas.push(nuevaCita);
+      localStorage.setItem(key, JSON.stringify(citas));
+
+      alert('¡Cita reservada con éxito!');
+      window.location.href = 'Untitled-3.html';
+    });
+  </script>
+</body>
+</html>

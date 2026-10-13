@@ -1,0 +1,25 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── USUARIOS ──────────────────────────────────────────────────────────────
+    // Un usuario autenticado puede leer y escribir solo su propio documento.
+    // El admin puede leer todos los documentos de usuarios.
+    match /usuarios/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+      allow read: if request.auth != null
+                  && get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.rol == 'admin';
+      allow write: if request.auth != null
+                   && get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.rol == 'admin';
+
+      // ── CITAS (subcolección) ─────────────────────────────────────────────
+      // El dueño de la cuenta puede leer y escribir sus propias citas.
+      // El admin puede leer y escribir citas de cualquier usuario.
+      match /citas/{citaId} {
+        allow read, write: if request.auth != null && request.auth.uid == uid;
+        allow read, write: if request.auth != null
+                           && get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.rol == 'admin';
+      }
+    }
+  }
+}

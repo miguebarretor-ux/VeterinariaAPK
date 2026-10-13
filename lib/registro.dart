@@ -1,6 +1,11 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'mascota_model.dart';
 import 'huellitas_theme.dart';
+import 'home_shell.dart';
+import 'widgets.dart';
+import 'repositories/usuario_repository.dart';
+import 'services/auth_service.dart';
 
 class FormularioRegistroPage extends StatefulWidget {
   const FormularioRegistroPage({super.key});
@@ -16,6 +21,7 @@ class _FormularioRegistroPageState extends State<FormularioRegistroPage> {
 
   final _contrasena1Ctrl = TextEditingController();
   bool _tieneMascota = false;
+  bool _cargando = false;
 
   @override
   void dispose() {
@@ -23,238 +29,214 @@ class _FormularioRegistroPageState extends State<FormularioRegistroPage> {
     super.dispose();
   }
 
-  void _registrar() {
-    if (_formKey.currentState!.validate()) {
-      _formKey.currentState!.save();
-      _usuario.tieneMascota = _tieneMascota;
-      if (_tieneMascota) _usuario.mascota = _mascota;
+  void _mostrarError(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg, style: const TextStyle(fontWeight: FontWeight.w700)),
+      backgroundColor: HuellitasTheme.coral,
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    ));
+  }
 
-      // TODO: enviar _usuario.toJson() a la API o base de datos
-      debugPrint('Datos: ${_usuario.toJson()}');
+  Future<void> _registrar() async {
+    if (!_formKey.currentState!.validate()) return;
+    _formKey.currentState!.save();
+    if (_tieneMascota) _usuario.mascotas = [_mascota];
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text(
-            'Registro exitoso',
-            style: TextStyle(fontWeight: FontWeight.w700),
-          ),
-          backgroundColor: HuellitasTheme.menta,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        ),
+    setState(() => _cargando = true);
+    try {
+      final credential = await AuthService.registrar(
+        _usuario.correo,
+        _usuario.contrasena,
       );
+      final uid = credential.user!.uid;
+      _usuario.uid = uid;
+
+      await UsuarioRepository.crear(uid, _usuario);
+
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => HomeShell(usuario: _usuario)),
+      );
+    } on FirebaseAuthException catch (e) {
+      _mostrarError(AuthService.mensajeError(e.code));
+    } finally {
+      if (mounted) setState(() => _cargando = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Theme(
-      data: HuellitasTheme.theme,
-      child: Scaffold(
-        appBar: AppBar(title: const Text('Crear cuenta')),
-        body: Form(
-          key: _formKey,
-          child: ListView(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-            children: [
+    return Scaffold(
+      backgroundColor: HuellitasTheme.lavanda,
+      appBar: AppBar(
+        backgroundColor: HuellitasTheme.lavanda,
+        foregroundColor: HuellitasTheme.ink,
+        elevation: 0,
+        title: const Text('Crear cuenta'),
+      ),
+      body: Form(
+        key: _formKey,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 480),
+              child: Container(
+                decoration: HuellitasTheme.cardBox(radius: 36),
+                padding: const EdgeInsets.all(28),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
 
-              // ── SECCIÓN: DOCUMENTO ─────────────────────────────────────
-              const _SectionLabel('Documento de identidad'),
-              const SizedBox(height: 12),
+                    // ── SECCIÓN: DOCUMENTO ─────────────────────────────────
+                    const SectionLabel('Documento de identidad'),
+                    const SizedBox(height: 12),
 
-              // TIPO DE DOCUMENTO
-              DropdownButtonFormField<String>(
-                initialValue: _usuario.tipoDocumento,
-                decoration: HuellitasTheme.field('Tipo de documento'),
-                items: [
-                  'Cédula de ciudadanía',
-                  'Cédula de extranjería',
-                  'Tarjeta de identidad',
-                  'Pasaporte',
-                ].map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
-                onChanged: (v) => setState(() => _usuario.tipoDocumento = v!),
-                onSaved: (v) => _usuario.tipoDocumento = v!,
-              ),
-              const SizedBox(height: 12),
-
-              // NÚMERO DE DOCUMENTO
-              TextFormField(
-                decoration: HuellitasTheme.field('Número de documento'),
-                keyboardType: TextInputType.number,
-                validator: (v) => (v == null || v.trim().isEmpty) ? 'Ingresa tu número de documento' : null,
-                onSaved: (v) => _usuario.numeroDocumento = v!,
-              ),
-              const SizedBox(height: 24),
-
-              // ── SECCIÓN: DATOS PERSONALES ──────────────────────────────
-              const _SectionLabel('Datos personales'),
-              const SizedBox(height: 12),
-
-              // NOMBRE
-              TextFormField(
-                decoration: HuellitasTheme.field('Nombre'),
-                textCapitalization: TextCapitalization.words,
-                validator: (v) => (v == null || v.trim().isEmpty) ? 'Ingresa tu nombre' : null,
-                onSaved: (v) => _usuario.nombre = v!.trim(),
-              ),
-              const SizedBox(height: 12),
-
-              // APELLIDO
-              TextFormField(
-                decoration: HuellitasTheme.field('Apellido'),
-                textCapitalization: TextCapitalization.words,
-                validator: (v) => (v == null || v.trim().isEmpty) ? 'Ingresa tu apellido' : null,
-                onSaved: (v) => _usuario.apellido = v!.trim(),
-              ),
-              const SizedBox(height: 12),
-
-              // CORREO
-              TextFormField(
-                decoration: HuellitasTheme.field('Correo electrónico'),
-                keyboardType: TextInputType.emailAddress,
-                validator: (v) {
-                  if (v == null || v.trim().isEmpty) return 'Ingresa tu correo';
-                  if (!v.contains('@') || !v.contains('.')) return 'Correo no válido';
-                  return null;
-                },
-                onSaved: (v) => _usuario.correo = v!.trim(),
-              ),
-              const SizedBox(height: 24),
-
-              // ── SECCIÓN: CONTRASEÑA ────────────────────────────────────
-              const _SectionLabel('Contraseña'),
-              const SizedBox(height: 12),
-
-              // CONTRASEÑA
-              TextFormField(
-                controller: _contrasena1Ctrl,
-                decoration: HuellitasTheme.field('Contraseña'),
-                obscureText: true,
-                validator: (v) {
-                  if (v == null || v.length < 6) return 'Mínimo 6 caracteres';
-                  return null;
-                },
-                onSaved: (v) => _usuario.contrasena = v!,
-              ),
-              const SizedBox(height: 12),
-
-              // CONFIRMAR CONTRASEÑA
-              TextFormField(
-                decoration: HuellitasTheme.field('Confirmar contraseña'),
-                obscureText: true,
-                validator: (v) =>
-                    (v == null || v != _contrasena1Ctrl.text) ? 'Las contraseñas no coinciden' : null,
-              ),
-              const SizedBox(height: 24),
-
-              // ── SECCIÓN: MASCOTA ───────────────────────────────────────
-              Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(28),
-                  boxShadow: HuellitasTheme.clay,
-                ),
-                child: Material(
-                  color: HuellitasTheme.leche,
-                  borderRadius: BorderRadius.circular(28),
-                  clipBehavior: Clip.antiAlias,
-                  child: SwitchListTile(
-                    title: const Text(
-                      '¿Tienes mascota?',
-                      style: TextStyle(fontWeight: FontWeight.w700),
+                    DropdownButtonFormField<String>(
+                      initialValue: _usuario.tipoDocumento,
+                      decoration: HuellitasTheme.field('Tipo de documento'),
+                      items: [
+                        'Cédula de ciudadanía',
+                        'Cédula de extranjería',
+                        'Tarjeta de identidad',
+                        'Pasaporte',
+                      ]
+                          .map((t) => DropdownMenuItem(value: t, child: Text(t)))
+                          .toList(),
+                      onChanged: (v) => setState(() => _usuario.tipoDocumento = v!),
+                      onSaved: (v) => _usuario.tipoDocumento = v!,
                     ),
-                    value: _tieneMascota,
-                    activeThumbColor: HuellitasTheme.ink,
-                    onChanged: (val) => setState(() => _tieneMascota = val),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-                  ),
+                    const SizedBox(height: 12),
+
+                    TextFormField(
+                      decoration: HuellitasTheme.field('Número de documento'),
+                      keyboardType: TextInputType.number,
+                      validator: (v) => (v == null || v.trim().isEmpty)
+                          ? 'Ingresa tu número de documento'
+                          : null,
+                      onSaved: (v) => _usuario.numeroDocumento = v!,
+                    ),
+                    const SizedBox(height: 24),
+
+                    // ── SECCIÓN: DATOS PERSONALES ──────────────────────────
+                    const SectionLabel('Datos personales'),
+                    const SizedBox(height: 12),
+
+                    TextFormField(
+                      decoration: HuellitasTheme.field('Nombre'),
+                      textCapitalization: TextCapitalization.words,
+                      validator: (v) =>
+                          (v == null || v.trim().isEmpty) ? 'Ingresa tu nombre' : null,
+                      onSaved: (v) => _usuario.nombre = v!.trim(),
+                    ),
+                    const SizedBox(height: 12),
+
+                    TextFormField(
+                      decoration: HuellitasTheme.field('Apellido'),
+                      textCapitalization: TextCapitalization.words,
+                      validator: (v) =>
+                          (v == null || v.trim().isEmpty) ? 'Ingresa tu apellido' : null,
+                      onSaved: (v) => _usuario.apellido = v!.trim(),
+                    ),
+                    const SizedBox(height: 12),
+
+                    TextFormField(
+                      decoration: HuellitasTheme.field('Correo electrónico'),
+                      keyboardType: TextInputType.emailAddress,
+                      validator: (v) {
+                        if (v == null || v.trim().isEmpty) return 'Ingresa tu correo';
+                        if (!v.contains('@') || !v.contains('.')) return 'Correo no válido';
+                        return null;
+                      },
+                      onSaved: (v) => _usuario.correo = v!.trim(),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // ── SECCIÓN: CONTRASEÑA ────────────────────────────────
+                    const SectionLabel('Contraseña'),
+                    const SizedBox(height: 12),
+
+                    TextFormField(
+                      controller: _contrasena1Ctrl,
+                      decoration: HuellitasTheme.field('Contraseña'),
+                      obscureText: true,
+                      validator: (v) {
+                        if (v == null || v.length < 6) return 'Mínimo 6 caracteres';
+                        return null;
+                      },
+                      onSaved: (v) => _usuario.contrasena = v!,
+                    ),
+                    const SizedBox(height: 12),
+
+                    TextFormField(
+                      decoration: HuellitasTheme.field('Confirmar contraseña'),
+                      obscureText: true,
+                      validator: (v) => (v == null || v != _contrasena1Ctrl.text)
+                          ? 'Las contraseñas no coinciden'
+                          : null,
+                    ),
+                    const SizedBox(height: 24),
+
+                    // ── SECCIÓN: MASCOTA ───────────────────────────────────
+                    Container(
+                      decoration: BoxDecoration(
+                        color: HuellitasTheme.arena,
+                        borderRadius: BorderRadius.circular(22),
+                      ),
+                      child: SwitchListTile(
+                        title: const Text(
+                          '¿Tienes mascota?',
+                          style: TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        value: _tieneMascota,
+                        onChanged: (val) => setState(() => _tieneMascota = val),
+                        contentPadding:
+                            const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                      ),
+                    ),
+
+                    if (_tieneMascota) ...[
+                      const SizedBox(height: 20),
+                      const SectionLabel('Datos de la mascota'),
+                      const SizedBox(height: 12),
+                      MascotaFormFields(mascota: _mascota),
+                    ],
+
+                    const SizedBox(height: 28),
+
+                    // ── BOTÓN REGISTRARSE ──────────────────────────────────
+                    ClayButton(
+                      child: ElevatedButton(
+                        onPressed: _cargando ? null : _registrar,
+                        child: _cargando
+                            ? const SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: HuellitasTheme.ink,
+                                ),
+                              )
+                            : const Text('Registrarse'),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+
+                    // ── ENLACE A LOGIN ─────────────────────────────────────
+                    AuthLink(
+                      prefixText: '¿Ya tienes cuenta? ',
+                      linkText: 'Inicia sesión',
+                      onTap: () => Navigator.pop(context),
+                    ),
+                  ],
                 ),
               ),
-
-              // DATOS DE LA MASCOTA (visible solo si tiene mascota)
-              if (_tieneMascota) ...[
-                const SizedBox(height: 20),
-                const _SectionLabel('Datos de la mascota'),
-                const SizedBox(height: 12),
-
-                TextFormField(
-                  decoration: HuellitasTheme.field('Nombre de la mascota'),
-                  textCapitalization: TextCapitalization.words,
-                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Ingresa el nombre' : null,
-                  onSaved: (v) => _mascota.nombre = v!.trim(),
-                ),
-                const SizedBox(height: 12),
-
-                DropdownButtonFormField<String>(
-                  initialValue: _mascota.tipo,
-                  decoration: HuellitasTheme.field('Tipo'),
-                  items: ['Perro', 'Gato', 'Otro']
-                      .map((t) => DropdownMenuItem(value: t, child: Text(t)))
-                      .toList(),
-                  onChanged: (v) => setState(() => _mascota.tipo = v!),
-                  onSaved: (v) => _mascota.tipo = v ?? 'Perro',
-                ),
-                const SizedBox(height: 12),
-
-                TextFormField(
-                  decoration: HuellitasTheme.field('Edad (años)'),
-                  keyboardType: TextInputType.number,
-                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Ingresa la edad' : null,
-                  onSaved: (v) => _mascota.edad = int.tryParse(v ?? '') ?? 0,
-                ),
-                const SizedBox(height: 12),
-
-                TextFormField(
-                  decoration: HuellitasTheme.field('Peso en kg', hint: 'Opcional'),
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  onSaved: (v) => _mascota.peso = double.tryParse(v ?? ''),
-                ),
-                const SizedBox(height: 12),
-
-                TextFormField(
-                  decoration: HuellitasTheme.field('Raza'),
-                  textCapitalization: TextCapitalization.words,
-                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Ingresa la raza o cruce' : null,
-                  onSaved: (v) => _mascota.raza = v!.trim(),
-                ),
-              ],
-
-              const SizedBox(height: 32),
-
-              // ── BOTÓN REGISTRARSE ──────────────────────────────────────
-              Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(24),
-                  boxShadow: HuellitasTheme.claySm,
-                ),
-                child: ElevatedButton(
-                  onPressed: _registrar,
-                  child: const Text('Registrarse'),
-                ),
-              ),
-
-              const SizedBox(height: 24),
-            ],
+            ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-/// Etiqueta de sección con estilo micro (uppercase, inkSoft)
-class _SectionLabel extends StatelessWidget {
-  final String text;
-  const _SectionLabel(this.text);
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      text.toUpperCase(),
-      style: const TextStyle(
-        fontSize: 12,
-        fontWeight: FontWeight.w700,
-        letterSpacing: 2.0,
-        color: HuellitasTheme.inkSoft,
       ),
     );
   }

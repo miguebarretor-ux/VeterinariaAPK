@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Carnet de Vacunas - Veterinaria</title>
+</head>
+<body>
+
+  <h2 id="tituloCarnet">Carnet de Vacunas</h2>
+
+  <div style="border: 1px solid #ccc; padding: 10px; margin-bottom: 15px;">
+    <h3>ESTADO GENERAL</h3>
+    <p><strong>4 de 5 al día</strong></p>
+  </div>
+
+  <table border="1" cellpadding="8">
+    <thead>
+      <tr>
+        <th>Vacuna / Tratamiento</th>
+        <th>Fecha / Vencimiento</th>
+        <th>Estado</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Antirrábica</td>
+        <td>Vence 4 sep 2026</td>
+        <td><strong>9 días</strong></td>
+      </tr>
+      <tr>
+        <td>Polivalente</td>
+        <td>Aplicada 12 mar 2026</td>
+        <td>Al día</td>
+      </tr>
+      <tr>
+        <td>Desparasitación</td>
+        <td>Aplicada 2 jul 2026</td>
+        <td>Al día</td>
+      </tr>
+      <tr>
+        <td>Tos de las perreras</td>
+        <td>Aplicada 20 ene 2026</td>
+        <td>Al día</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <br>
+  <button onclick="alert('Compartir carnet...')">Compartir</button>
+  <button onclick="alert('Descargando carnet...')">Descargar</button>
+  <br><br>
+  <a href="Untitled-3.html">Volver al Inicio</a>
+
+  <script>
+    const usuarioSesion = JSON.parse(localStorage.getItem('usuarioSesion'));
+    if (!usuarioSesion) window.location.href = 'Untitled-2.html';
+
+    const nombreM = (usuarioSesion.mascota && usuarioSesion.mascota.nombre) ? usuarioSesion.mascota.nombre : "Mascota";
+    document.getElementById('tituloCarnet').innerText = `Carnet de ${nombreM}`;
+  </script>
+</body>
+</html>
