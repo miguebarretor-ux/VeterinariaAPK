@@ -2,24 +2,76 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ── USUARIOS ──────────────────────────────────────────────────────────────
-    // Un usuario autenticado puede leer y escribir solo su propio documento.
-    // El admin puede leer todos los documentos de usuarios.
-    match /usuarios/{uid} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
-      allow read: if request.auth != null
-                  && get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.rol == 'admin';
-      allow write: if request.auth != null
-                   && get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.rol == 'admin';
+    // ── Helpers ───────────────────────────────────────────────────────────────
+    function rolDelUsuario() {
+      return get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.rol;
+    }
+    function esAdmin()        { return rolDelUsuario() == 'admin'; }
+    function esVeterinario()  { return rolDelUsuario() == 'veterinario'; }
 
-      // ── CITAS (subcolección) ─────────────────────────────────────────────
-      // El dueño de la cuenta puede leer y escribir sus propias citas.
-      // El admin puede leer y escribir citas de cualquier usuario.
+    // ── USUARIOS ──────────────────────────────────────────────────────────────
+    match /usuarios/{uid} {
+      // Cada usuario lee y escribe su propio documento
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+
+      // Admin puede leer y escribir cualquier documento de usuario
+      allow read, write: if request.auth != null && esAdmin();
+
+      // Veterinario puede leer su propio documento (ya cubierto arriba)
+      // y leer datos básicos de usuarios para mostrar info en sus tareas
+      allow read: if request.auth != null && esVeterinario();
+
+      // ── CITAS (subcolección) ───────────────────────────────────────────────
       match /citas/{citaId} {
+        // El dueño puede leer y escribir sus propias citas
         allow read, write: if request.auth != null && request.auth.uid == uid;
-        allow read, write: if request.auth != null
-                           && get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.rol == 'admin';
+
+        // Admin puede leer y escribir citas de cualquier usuario
+        allow read, write: if request.auth != null && esAdmin();
+
+        // Veterinario puede leer citas que le están asignadas
+        allow read: if request.auth != null && esVeterinario()
+                    && resource.data.veterinarioId == request.auth.uid;
+      }
+
+      // ── CARRITO (subcolección — Fase 6) ───────────────────────────────────
+      match /carrito/{itemId} {
+        allow read, write: if request.auth != null && request.auth.uid == uid;
+        allow read, write: if request.auth != null && esAdmin();
+      }
+
+      // ── PEDIDOS (subcolección — Fase 6) ───────────────────────────────────
+      match /pedidos/{pedidoId} {
+        allow read, write: if request.auth != null && request.auth.uid == uid;
+        allow read: if request.auth != null && esAdmin();
       }
     }
+
+    // ── CITAS — collectionGroup (para vista del veterinario) ─────────────────
+    // Permite al veterinario hacer queries a través de todos los usuarios.
+    match /{path=**}/citas/{citaId} {
+      allow read: if request.auth != null
+                  && (esAdmin() || esVeterinario());
+    }
+
+    // ── SERVICIOS (Fase 5) ────────────────────────────────────────────────────
+    match /servicios/{servicioId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && esAdmin();
+    }
+
+    // ── CATÁLOGO DE VACUNAS (Fase 5) ─────────────────────────────────────────
+    match /vacunas_catalogo/{vacunaId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && esAdmin();
+    }
+
+    // ── PRODUCTOS / TIENDA (Fase 6) ───────────────────────────────────────────
+    match /productos/{productoId} {
+      // Todos los autenticados pueden leer productos visibles
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && esAdmin();
+    }
+
   }
 }

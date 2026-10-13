@@ -134,7 +134,8 @@ class UsuarioModel {
   String correo;
   String contrasena; // solo en memoria durante registro, NO se guarda en Firestore
   List<MascotaModel> mascotas;
-  String rol; // 'usuario' | 'admin'
+  String rol;          // 'usuario' | 'admin' | 'veterinario'
+  String especialidad; // solo para veterinarios
 
   UsuarioModel({
     this.uid,
@@ -146,6 +147,7 @@ class UsuarioModel {
     this.contrasena = '',
     List<MascotaModel>? mascotas,
     this.rol = 'usuario',
+    this.especialidad = '',
   }) : mascotas = mascotas ?? [];
 
   // ── Getters de compatibilidad ─────────────────────────────────────────────
@@ -169,6 +171,7 @@ class UsuarioModel {
       correo: data['correo'] ?? '',
       mascotas: mascotas,
       rol: data['rol'] ?? 'usuario',
+      especialidad: data['especialidad'] ?? '',
     );
   }
 
@@ -180,6 +183,7 @@ class UsuarioModel {
         'apellido': apellido,
         'correo': correo,
         'rol': rol,
+        'especialidad': especialidad,
         'mascotas': mascotas.map((m) => m.toFirestore()).toList(),
       };
 
@@ -218,14 +222,86 @@ class UsuarioModel {
       };
 }
 
+// ─── PRODUCTO ─────────────────────────────────────────────────────────────────
+
+class ProductoModel {
+  String? id;
+  String nombre;
+  String descripcion;
+  double precio;
+  int stock;
+  bool activo;
+
+  ProductoModel({
+    this.id,
+    required this.nombre,
+    this.descripcion = '',
+    this.precio = 0,
+    this.stock = 0,
+    this.activo = true,
+  });
+
+  factory ProductoModel.fromFirestore(String id, Map<String, dynamic> d) =>
+      ProductoModel(
+        id: id,
+        nombre: d['nombre'] ?? '',
+        descripcion: d['descripcion'] ?? '',
+        precio: (d['precio'] as num?)?.toDouble() ?? 0,
+        stock: (d['stock'] as num?)?.toInt() ?? 0,
+        activo: d['activo'] ?? true,
+      );
+
+  Map<String, dynamic> toFirestore() => {
+        'nombre': nombre,
+        'descripcion': descripcion,
+        'precio': precio,
+        'stock': stock,
+        'activo': activo,
+      };
+}
+
+// ─── CARRITO ITEM ──────────────────────────────────────────────────────────────
+
+class CarritoItemModel {
+  String productoId;
+  String nombre;
+  double precio;
+  int cantidad;
+
+  CarritoItemModel({
+    required this.productoId,
+    required this.nombre,
+    required this.precio,
+    required this.cantidad,
+  });
+
+  factory CarritoItemModel.fromFirestore(String id, Map<String, dynamic> d) =>
+      CarritoItemModel(
+        productoId: id,
+        nombre: d['nombre'] ?? '',
+        precio: (d['precio'] as num?)?.toDouble() ?? 0,
+        cantidad: (d['cantidad'] as num?)?.toInt() ?? 1,
+      );
+
+  Map<String, dynamic> toFirestore() => {
+        'nombre': nombre,
+        'precio': precio,
+        'cantidad': cantidad,
+      };
+
+  double get subtotal => precio * cantidad;
+}
+
 // ─── CITA ──────────────────────────────────────────────────────────────────────
 
 class CitaModel {
-  String? id; // Firestore document ID
+  String? id;                 // Firestore document ID
   String mascota;
   String servicio;
-  String fecha; // yyyy-MM-dd
-  String hora;  // HH:mm
+  String fecha;               // yyyy-MM-dd
+  String hora;                // HH:mm
+  String? veterinarioId;      // UID del veterinario asignado (nullable)
+  String? veterinarioNombre;  // Nombre completo del veterinario asignado
 
   CitaModel({
     this.id,
@@ -233,6 +309,8 @@ class CitaModel {
     required this.servicio,
     required this.fecha,
     required this.hora,
+    this.veterinarioId,
+    this.veterinarioNombre,
   });
 
   factory CitaModel.fromJson(Map<String, dynamic> json) => CitaModel(
@@ -241,6 +319,8 @@ class CitaModel {
         servicio: json['servicio'] ?? '',
         fecha: json['fecha'] ?? '',
         hora: json['hora'] ?? '',
+        veterinarioId: json['veterinarioId'],
+        veterinarioNombre: json['veterinarioNombre'],
       );
 
   Map<String, dynamic> toJson() => {
@@ -248,6 +328,8 @@ class CitaModel {
         'servicio': servicio,
         'fecha': fecha,
         'hora': hora,
+        if (veterinarioId != null) 'veterinarioId': veterinarioId,
+        if (veterinarioNombre != null) 'veterinarioNombre': veterinarioNombre,
       };
 
   bool get esProxima {

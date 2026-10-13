@@ -3,10 +3,22 @@ import 'mascota_model.dart';
 import 'huellitas_theme.dart';
 import 'login.dart';
 import 'admin_usuarios.dart';
+import 'admin_veterinarios.dart';
+import 'admin_servicios.dart';
+import 'admin_tienda.dart';
 import 'services/auth_service.dart';
 
-class AdminShell extends StatelessWidget {
+class AdminShell extends StatefulWidget {
   const AdminShell({super.key});
+
+  @override
+  State<AdminShell> createState() => _AdminShellState();
+}
+
+class _AdminShellState extends State<AdminShell> {
+  int _tab = 0;
+
+  static const _labels = ['Usuarios', 'Veterinarios', 'Servicios', 'Tienda'];
 
   void _cerrarSesion(BuildContext context) async {
     await AuthService.cerrarSesion();
@@ -21,6 +33,13 @@ class AdminShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const pages = [
+      AdminUsuariosPage(),
+      _AdminVetsPage(),
+      _AdminServiciosPage(),
+      _AdminTiendaPage(),
+    ];
+
     return Scaffold(
       backgroundColor: HuellitasTheme.arena,
       appBar: AppBar(
@@ -45,9 +64,9 @@ class AdminShell extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 10),
-            const Text(
-              'Huellitas',
-              style: TextStyle(
+            Text(
+              _labels[_tab],
+              style: const TextStyle(
                 fontFamily: 'serif',
                 fontWeight: FontWeight.w800,
                 color: HuellitasTheme.leche,
@@ -66,11 +85,79 @@ class AdminShell extends StatelessWidget {
           ),
         ],
       ),
-      body: const AdminUsuariosPage(),
+      body: IndexedStack(index: _tab, children: pages),
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          color: HuellitasTheme.leche,
+          boxShadow: [
+            BoxShadow(
+              offset: const Offset(0, -4),
+              blurRadius: 18,
+              color: HuellitasTheme.ink.withAlpha(18),
+            ),
+          ],
+        ),
+        child: BottomNavigationBar(
+          currentIndex: _tab,
+          onTap: (i) => setState(() => _tab = i),
+          type: BottomNavigationBarType.fixed,
+          backgroundColor: HuellitasTheme.leche,
+          selectedItemColor: HuellitasTheme.ink,
+          unselectedItemColor: HuellitasTheme.inkSoft,
+          selectedLabelStyle:
+              const TextStyle(fontWeight: FontWeight.w700, fontSize: 11),
+          unselectedLabelStyle:
+              const TextStyle(fontWeight: FontWeight.w500, fontSize: 11),
+          elevation: 0,
+          items: const [
+            BottomNavigationBarItem(
+              icon: Icon(Icons.people_rounded),
+              label: 'Usuarios',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.medical_services_outlined),
+              label: 'Veterinarios',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.build_circle_outlined),
+              label: 'Servicios',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.storefront_outlined),
+              label: 'Tienda',
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
 
+// ── PLACEHOLDERS ──────────────────────────────────────────────────────────────
+// Reemplazados en las Fases 2, 5 y 6 respectivamente.
+
+class _AdminVetsPage extends StatelessWidget {
+  const _AdminVetsPage();
+
+  @override
+  Widget build(BuildContext context) => const AdminVeterinariosPage();
+}
+
+class _AdminServiciosPage extends StatelessWidget {
+  const _AdminServiciosPage();
+
+  @override
+  Widget build(BuildContext context) => const AdminServiciosPage();
+}
+
+class _AdminTiendaPage extends StatelessWidget {
+  const _AdminTiendaPage();
+
+  @override
+  Widget build(BuildContext context) => const AdminTiendaPage();
+}
+
+// ── HOJA DE VACUNA ─────────────────────────────────────────────────────────────
 /// Hoja de vacuna reutilizable por el panel de admin.
 class AdminVacunaSheet extends StatefulWidget {
   final void Function(VacunaModel) onGuardar;
@@ -104,7 +191,9 @@ class _AdminVacunaSheetState extends State<AdminVacunaSheet> {
       );
 
   void _guardar() {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
     if (_fechaAplicacion == null) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: const Text('Selecciona la fecha de aplicación',
@@ -125,18 +214,26 @@ class _AdminVacunaSheetState extends State<AdminVacunaSheet> {
   }
 
   String _fmt(DateTime dt) {
-    const m = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+    const m = [
+      'ene', 'feb', 'mar', 'abr', 'may', 'jun',
+      'jul', 'ago', 'sep', 'oct', 'nov', 'dic'
+    ];
     return '${dt.day} ${m[dt.month - 1]} ${dt.year}';
   }
 
-  Widget _dateRow({required String label, required DateTime? value,
-      required VoidCallback onTap, bool optional = false}) {
+  Widget _dateRow({
+    required String label,
+    required DateTime? value,
+    required VoidCallback onTap,
+    bool optional = false,
+  }) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
         decoration: BoxDecoration(
-            color: HuellitasTheme.arena, borderRadius: BorderRadius.circular(22)),
+            color: HuellitasTheme.arena,
+            borderRadius: BorderRadius.circular(22)),
         child: Row(children: [
           const Icon(Icons.calendar_today_outlined,
               size: 18, color: HuellitasTheme.inkSoft),
@@ -145,7 +242,9 @@ class _AdminVacunaSheetState extends State<AdminVacunaSheet> {
             child: Text(
               value != null
                   ? '$label: ${_fmt(value)}'
-                  : optional ? '$label (opcional)' : label,
+                  : optional
+                      ? '$label (opcional)'
+                      : label,
               style: TextStyle(
                 fontSize: 16,
                 color: value != null
@@ -182,7 +281,8 @@ class _AdminVacunaSheetState extends State<AdminVacunaSheet> {
           children: [
             Center(
               child: Container(
-                width: 40, height: 4,
+                width: 40,
+                height: 4,
                 decoration: BoxDecoration(
                     color: HuellitasTheme.lima,
                     borderRadius: BorderRadius.circular(999)),
@@ -193,7 +293,8 @@ class _AdminVacunaSheetState extends State<AdminVacunaSheet> {
                 style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 20),
             TextFormField(
-              decoration: HuellitasTheme.field('Nombre de la vacuna o tratamiento'),
+              decoration:
+                  HuellitasTheme.field('Nombre de la vacuna o tratamiento'),
               textCapitalization: TextCapitalization.sentences,
               validator: (v) =>
                   (v == null || v.trim().isEmpty) ? 'Ingresa el nombre' : null,
@@ -205,7 +306,9 @@ class _AdminVacunaSheetState extends State<AdminVacunaSheet> {
               value: _fechaAplicacion,
               onTap: () async {
                 final dt = await _pickDate();
-                if (dt != null) setState(() => _fechaAplicacion = dt);
+                if (dt != null) {
+                  setState(() => _fechaAplicacion = dt);
+                }
               },
             ),
             const SizedBox(height: 12),
@@ -214,8 +317,11 @@ class _AdminVacunaSheetState extends State<AdminVacunaSheet> {
               value: _fechaVencimiento,
               optional: true,
               onTap: () async {
-                final dt = await _pickDate(first: _fechaAplicacion ?? DateTime.now());
-                if (dt != null) setState(() => _fechaVencimiento = dt);
+                final dt =
+                    await _pickDate(first: _fechaAplicacion ?? DateTime.now());
+                if (dt != null) {
+                  setState(() => _fechaVencimiento = dt);
+                }
               },
             ),
             const SizedBox(height: 24),

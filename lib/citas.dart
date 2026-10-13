@@ -4,6 +4,8 @@ import 'mascota_model.dart';
 import 'huellitas_theme.dart';
 import 'widgets.dart';
 import 'repositories/cita_repository.dart';
+import 'repositories/usuario_repository.dart';
+import 'repositories/servicio_repository.dart';
 
 class CitasPage extends StatefulWidget {
   final UsuarioModel usuario;
@@ -218,6 +220,22 @@ class _CitaCard extends StatelessWidget {
                     color: HuellitasTheme.inkSoft,
                   ),
                 ),
+                if (cita.veterinarioNombre != null) ...[
+                  const SizedBox(height: 4),
+                  Row(children: [
+                    const Icon(Icons.medical_services_outlined,
+                        size: 11, color: HuellitasTheme.inkSoft),
+                    const SizedBox(width: 4),
+                    Text(
+                      cita.veterinarioNombre!,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: HuellitasTheme.inkSoft,
+                      ),
+                    ),
+                  ]),
+                ],
               ],
             ),
           ),
@@ -269,28 +287,55 @@ class _CitaSheet extends StatefulWidget {
 }
 
 class _CitaSheetState extends State<_CitaSheet> {
-  static const _servicios = [
-    'Control de rutina',
-    'Vacunación',
-    'Consulta general',
-    'Peluquería',
-    'Urgencias',
-  ];
   static const _horas = [
     '08:00', '09:00', '10:00', '10:30',
     '12:00', '14:00', '15:00', '16:30',
   ];
 
-  String _servicio = 'Control de rutina';
+  // Servicios dinámicos desde Firestore; lista de respaldo por si no hay datos.
+  static const _serviciosFallback = [
+    'Control de rutina', 'Vacunación', 'Consulta general',
+    'Peluquería', 'Urgencias',
+  ];
+
+  List<String> _servicios = _serviciosFallback;
+  String? _servicio;
   DateTime? _fecha;
   String _hora = '09:00';
   String? _mascotaSeleccionada;
+
+  List<UsuarioModel> _vets = [];
+  bool _cargandoVets = true;
+  String? _vetId;
+  String? _vetNombre;
 
   @override
   void initState() {
     super.initState();
     if (widget.mascotas.isNotEmpty) {
       _mascotaSeleccionada = widget.mascotas.first.nombre;
+    }
+    _cargarDatos();
+  }
+
+  Future<void> _cargarDatos() async {
+    final results = await Future.wait([
+      UsuarioRepository.veterinariosOnce(),
+      ServicioRepository.streamActivos().first,
+    ]);
+    final vets = results[0] as List<UsuarioModel>;
+    final svcs = results[1] as List<ServicioModel>;
+    if (mounted) {
+      setState(() {
+        _vets = vets;
+        _cargandoVets = false;
+        if (svcs.isNotEmpty) {
+          _servicios = svcs.map((s) => s.nombre).toList();
+          _servicio = _servicios.first;
+        } else {
+          _servicio = _serviciosFallback.first;
+        }
+      });
     }
   }
 
@@ -330,9 +375,11 @@ class _CitaSheetState extends State<_CitaSheet> {
     }
     widget.onGuardar(CitaModel(
       mascota: _mascotaSeleccionada ?? '',
-      servicio: _servicio,
+      servicio: _servicio ?? '',
       fecha: _fecha!.toIso8601String().substring(0, 10),
       hora: _hora,
+      veterinarioId: _vetId,
+      veterinarioNombre: _vetNombre,
     ));
     Navigator.pop(context);
   }
@@ -429,6 +476,42 @@ class _CitaSheetState extends State<_CitaSheet> {
                 .toList(),
             onChanged: (v) => setState(() => _hora = v!),
           ),
+          const SizedBox(height: 12),
+
+          // Veterinario
+          if (_cargandoVets)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 12),
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, color: HuellitasTheme.lavanda),
+              ),
+            )
+          else
+            DropdownButtonFormField<String?>(
+              key: ValueKey(_vetId),
+              initialValue: _vetId,
+              decoration: HuellitasTheme.field('Veterinario'),
+              items: [
+                const DropdownMenuItem(
+                    value: null, child: Text('Sin preferencia')),
+                ..._vets.map((v) => DropdownMenuItem(
+                      value: v.uid,
+                      child: Text('${v.nombre} ${v.apellido}'),
+                    )),
+              ],
+              onChanged: (id) {
+                setState(() {
+                  _vetId = id;
+                  if (id == null) {
+                    _vetNombre = null;
+                  } else {
+                    final vet = _vets.firstWhere((v) => v.uid == id);
+                    _vetNombre = '${vet.nombre} ${vet.apellido}';
+                  }
+                });
+              },
+            ),
           const SizedBox(height: 24),
 
           ClayButton(

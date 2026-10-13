@@ -6,6 +6,7 @@ import 'inicio.dart';
 import 'citas.dart';
 import 'carnet.dart';
 import 'bienvenida.dart';
+import 'tienda.dart';
 import 'repositories/usuario_repository.dart';
 
 class HomeShell extends StatefulWidget {
@@ -52,6 +53,7 @@ class _HomeShellState extends State<HomeShell> {
       ),
       CitasPage(key: const ValueKey(1), usuario: _usuario),
       CarnetPage(key: const ValueKey(2), usuario: _usuario),
+      TiendaPage(key: const ValueKey(3), usuario: _usuario),
     ];
 
     return Scaffold(
@@ -89,6 +91,10 @@ class _HomeShellState extends State<HomeShell> {
             BottomNavigationBarItem(
               icon: Icon(Icons.medical_services_outlined),
               label: 'Carnet',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.storefront_outlined),
+              label: 'Tienda',
             ),
           ],
         ),

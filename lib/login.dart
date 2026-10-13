@@ -4,6 +4,7 @@ import 'huellitas_theme.dart';
 import 'registro.dart';
 import 'home_shell.dart';
 import 'admin_shell.dart';
+import 'veterinario_shell.dart';
 import 'widgets.dart';
 import 'repositories/usuario_repository.dart';
 import 'services/auth_service.dart';
@@ -61,6 +62,12 @@ class _IniciarSesionPageState extends State<IniciarSesionPage> {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (_) => const AdminShell()),
+        );
+      } else if (usuario.rol == 'veterinario') {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+              builder: (_) => VeterinarioShell(usuario: usuario)),
         );
       } else {
         Navigator.pushReplacement(

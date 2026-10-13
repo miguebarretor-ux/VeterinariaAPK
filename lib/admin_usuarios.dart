@@ -15,14 +15,34 @@ class AdminUsuariosPage extends StatefulWidget {
 
 class _AdminUsuariosPageState extends State<AdminUsuariosPage> {
   List<UsuarioModel> _usuarios = [];
+  bool _cargando = true;
   StreamSubscription<List<UsuarioModel>>? _sub;
 
   @override
   void initState() {
     super.initState();
-    _sub = UsuarioRepository.todos().listen((lista) {
-      if (mounted) setState(() => _usuarios = lista);
-    });
+    _sub = UsuarioRepository.todos().listen(
+      (lista) {
+        if (mounted) {
+          setState(() {
+            _usuarios = lista;
+            _cargando = false;
+          });
+        }
+      },
+      onError: (_) {
+        if (mounted) {
+          setState(() => _cargando = false);
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: const Text('Error al cargar usuarios. Verifica tu conexión.',
+                style: TextStyle(fontWeight: FontWeight.w700)),
+            backgroundColor: HuellitasTheme.coral,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          ));
+        }
+      },
+    );
   }
 
   @override
@@ -33,6 +53,11 @@ class _AdminUsuariosPageState extends State<AdminUsuariosPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (_cargando) {
+      return const Center(
+        child: CircularProgressIndicator(color: HuellitasTheme.lima),
+      );
+    }
     return _usuarios.isEmpty ? _EmptyState() : _Lista(usuarios: _usuarios);
   }
 }
