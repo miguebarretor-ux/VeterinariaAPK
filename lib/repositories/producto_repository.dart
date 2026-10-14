@@ -9,14 +9,18 @@ class ProductoRepository {
           .map((d) => ProductoModel.fromFirestore(d.id, d.data()))
           .toList());
 
+  // Filtra activos en cliente para evitar índice compuesto en Firestore.
   static Stream<List<ProductoModel>> streamActivos() =>
       _col
           .where('activo', isEqualTo: true)
-          .orderBy('nombre')
           .snapshots()
-          .map((s) => s.docs
-              .map((d) => ProductoModel.fromFirestore(d.id, d.data()))
-              .toList());
+          .map((s) {
+            final lista = s.docs
+                .map((d) => ProductoModel.fromFirestore(d.id, d.data()))
+                .toList()
+              ..sort((a, b) => a.nombre.compareTo(b.nombre));
+            return lista;
+          });
 
   static Future<void> agregar(ProductoModel p) => _col.add(p.toFirestore());
 

@@ -72,14 +72,18 @@ class ServicioRepository {
           .map((d) => ServicioModel.fromFirestore(d.id, d.data()))
           .toList());
 
+  // Filtra activos en cliente para evitar índice compuesto en Firestore.
   static Stream<List<ServicioModel>> streamActivos() =>
       _servicios
           .where('activo', isEqualTo: true)
-          .orderBy('nombre')
           .snapshots()
-          .map((s) => s.docs
-              .map((d) => ServicioModel.fromFirestore(d.id, d.data()))
-              .toList());
+          .map((s) {
+            final lista = s.docs
+                .map((d) => ServicioModel.fromFirestore(d.id, d.data()))
+                .toList()
+              ..sort((a, b) => a.nombre.compareTo(b.nombre));
+            return lista;
+          });
 
   static Future<void> agregar(ServicioModel s) =>
       _servicios.add(s.toFirestore());

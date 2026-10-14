@@ -319,23 +319,35 @@ class _CitaSheetState extends State<_CitaSheet> {
   }
 
   Future<void> _cargarDatos() async {
-    final results = await Future.wait([
-      UsuarioRepository.veterinariosOnce(),
-      ServicioRepository.streamActivos().first,
-    ]);
-    final vets = results[0] as List<UsuarioModel>;
-    final svcs = results[1] as List<ServicioModel>;
-    if (mounted) {
-      setState(() {
-        _vets = vets;
-        _cargandoVets = false;
-        if (svcs.isNotEmpty) {
-          _servicios = svcs.map((s) => s.nombre).toList();
-          _servicio = _servicios.first;
-        } else {
+    try {
+      final results = await Future.wait([
+        UsuarioRepository.veterinariosOnce(),
+        ServicioRepository.streamActivos()
+            .first
+            .timeout(const Duration(seconds: 6), onTimeout: () => []),
+      ]);
+      final vets = results[0] as List<UsuarioModel>;
+      final svcs = results[1] as List<ServicioModel>;
+      if (mounted) {
+        setState(() {
+          _vets = vets;
+          _cargandoVets = false;
+          if (svcs.isNotEmpty) {
+            _servicios = svcs.map((s) => s.nombre).toList();
+            _servicio = _servicios.first;
+          } else {
+            _servicio = _serviciosFallback.first;
+          }
+        });
+      }
+    } catch (_) {
+      // Si falla Firestore, usamos la lista de respaldo para que el formulario cargue.
+      if (mounted) {
+        setState(() {
+          _cargandoVets = false;
           _servicio = _serviciosFallback.first;
-        }
-      });
+        });
+      }
     }
   }
 

@@ -24,12 +24,20 @@ class _AdminServiciosPageState extends State<AdminServiciosPage>
   void initState() {
     super.initState();
     _tabs = TabController(length: 2, vsync: this);
-    _subS = ServicioRepository.stream().listen((lista) {
-      if (mounted) setState(() { _servicios = lista; _cargando = false; });
-    });
-    _subV = ServicioRepository.streamVacunas().listen((lista) {
-      if (mounted) setState(() => _vacunas = lista);
-    });
+    _subS = ServicioRepository.stream().listen(
+      (lista) {
+        if (mounted) setState(() { _servicios = lista; _cargando = false; });
+      },
+      onError: (_) {
+        if (mounted) setState(() => _cargando = false);
+      },
+    );
+    _subV = ServicioRepository.streamVacunas().listen(
+      (lista) {
+        if (mounted) setState(() => _vacunas = lista);
+      },
+      onError: (_) {},
+    );
   }
 
   @override

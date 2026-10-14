@@ -44,7 +44,10 @@ class _AdminTiendaPageState extends State<AdminTiendaPage> {
           padding: EdgeInsets.only(
               bottom: MediaQuery.of(context).viewInsets.bottom),
           child: _ProductoSheet(
-            onGuardar: (p) => ProductoRepository.agregar(p),
+            onGuardar: (p) async {
+              await ProductoRepository.agregar(p);
+            },
+            onError: _mostrarError,
           ),
         ),
       );
@@ -58,10 +61,25 @@ class _AdminTiendaPageState extends State<AdminTiendaPage> {
               bottom: MediaQuery.of(context).viewInsets.bottom),
           child: _ProductoSheet(
             producto: p,
-            onGuardar: (updated) => ProductoRepository.actualizar(updated),
+            onGuardar: (updated) async {
+              await ProductoRepository.actualizar(updated);
+            },
+            onError: _mostrarError,
           ),
         ),
       );
+
+  void _mostrarError(Object e) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text('Error al guardar: $e',
+          style: const TextStyle(fontWeight: FontWeight.w700)),
+      backgroundColor: HuellitasTheme.coral,
+      behavior: SnackBarBehavior.floating,
+      shape:
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    ));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -299,8 +317,13 @@ class _ProductoCard extends StatelessWidget {
 
 class _ProductoSheet extends StatefulWidget {
   final ProductoModel? producto;
-  final void Function(ProductoModel) onGuardar;
-  const _ProductoSheet({this.producto, required this.onGuardar});
+  final Future<void> Function(ProductoModel) onGuardar;
+  final void Function(Object) onError;
+  const _ProductoSheet({
+    this.producto,
+    required this.onGuardar,
+    required this.onError,
+  });
 
   @override
   State<_ProductoSheet> createState() => _ProductoSheetState();
@@ -322,18 +345,22 @@ class _ProductoSheetState extends State<_ProductoSheet> {
     _stock = widget.producto?.stock ?? 0;
   }
 
-  void _guardar() {
+  Future<void> _guardar() async {
     if (!_formKey.currentState!.validate()) return;
     _formKey.currentState!.save();
-    widget.onGuardar(ProductoModel(
-      id: widget.producto?.id,
-      nombre: _nombre,
-      descripcion: _descripcion,
-      precio: _precio,
-      stock: _stock,
-      activo: widget.producto?.activo ?? true,
-    ));
-    Navigator.pop(context);
+    try {
+      await widget.onGuardar(ProductoModel(
+        id: widget.producto?.id,
+        nombre: _nombre,
+        descripcion: _descripcion,
+        precio: _precio,
+        stock: _stock,
+        activo: widget.producto?.activo ?? true,
+      ));
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      widget.onError(e);
+    }
   }
 
   @override
@@ -412,7 +439,7 @@ class _ProductoSheetState extends State<_ProductoSheet> {
             const SizedBox(height: 24),
             ClayButton(
               child: ElevatedButton(
-                onPressed: _guardar,
+                onPressed: () => _guardar(),
                 child:
                     Text(esEdicion ? 'Guardar cambios' : 'Crear producto'),
               ),
