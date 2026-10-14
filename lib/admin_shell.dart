@@ -7,6 +7,7 @@ import 'admin_veterinarios.dart';
 import 'admin_servicios.dart';
 import 'admin_tienda.dart';
 import 'services/auth_service.dart';
+import 'repositories/servicio_repository.dart';
 
 class AdminShell extends StatefulWidget {
   const AdminShell({super.key});
@@ -169,9 +170,39 @@ class AdminVacunaSheet extends StatefulWidget {
 
 class _AdminVacunaSheetState extends State<AdminVacunaSheet> {
   final _formKey = GlobalKey<FormState>();
-  String _nombre = '';
+  final _nombreCtrl = TextEditingController();
   DateTime? _fechaAplicacion;
   DateTime? _fechaVencimiento;
+  List<String> _catalogo = [];
+  bool _catalogoCargando = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _cargarCatalogo();
+  }
+
+  @override
+  void dispose() {
+    _nombreCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _cargarCatalogo() async {
+    try {
+      final lista = await ServicioRepository.streamVacunas()
+          .first
+          .timeout(const Duration(seconds: 6), onTimeout: () => []);
+      if (mounted) {
+        setState(() {
+          _catalogo = lista.map((v) => v.nombre).toList();
+          _catalogoCargando = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _catalogoCargando = false);
+    }
+  }
 
   Future<DateTime?> _pickDate({DateTime? initial, DateTime? first}) =>
       showDatePicker(
@@ -191,9 +222,7 @@ class _AdminVacunaSheetState extends State<AdminVacunaSheet> {
       );
 
   void _guardar() {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
+    if (!_formKey.currentState!.validate()) return;
     if (_fechaAplicacion == null) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: const Text('Selecciona la fecha de aplicación',
@@ -206,7 +235,7 @@ class _AdminVacunaSheetState extends State<AdminVacunaSheet> {
     }
     _formKey.currentState!.save();
     widget.onGuardar(VacunaModel(
-      nombre: _nombre,
+      nombre: _nombreCtrl.text.trim(),
       fechaAplicacion: _fechaAplicacion!.toIso8601String().substring(0, 10),
       fechaVencimiento: _fechaVencimiento?.toIso8601String().substring(0, 10),
     ));
@@ -256,7 +285,8 @@ class _AdminVacunaSheetState extends State<AdminVacunaSheet> {
           if (value != null && optional)
             GestureDetector(
               onTap: () => setState(() => _fechaVencimiento = null),
-              child: const Icon(Icons.close, size: 18, color: HuellitasTheme.inkSoft),
+              child: const Icon(Icons.close,
+                  size: 18, color: HuellitasTheme.inkSoft),
             ),
         ]),
       ),
@@ -265,6 +295,8 @@ class _AdminVacunaSheetState extends State<AdminVacunaSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final nombreActual = _nombreCtrl.text.trim();
+
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
       decoration: BoxDecoration(
@@ -279,10 +311,10 @@ class _AdminVacunaSheetState extends State<AdminVacunaSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            // Handle
             Center(
               child: Container(
-                width: 40,
-                height: 4,
+                width: 40, height: 4,
                 decoration: BoxDecoration(
                     color: HuellitasTheme.lima,
                     borderRadius: BorderRadius.circular(999)),
@@ -292,23 +324,97 @@ class _AdminVacunaSheetState extends State<AdminVacunaSheet> {
             Text('Agregar vacuna / tratamiento',
                 style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 20),
+
+            // ── Catálogo de vacunas ──────────────────────────────────
+            if (_catalogoCargando)
+              const Padding(
+                padding: EdgeInsets.only(bottom: 12),
+                child: Center(
+                  child: SizedBox(
+                    width: 18, height: 18,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: HuellitasTheme.lima),
+                  ),
+                ),
+              )
+            else if (_catalogo.isNotEmpty) ...[
+              const Text(
+                'DESDE EL CATÁLOGO',
+                style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.5,
+                    color: HuellitasTheme.inkSoft),
+              ),
+              const SizedBox(height: 8),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: _catalogo.map((nombre) {
+                    final seleccionada = nombreActual == nombre;
+                    return GestureDetector(
+                      onTap: () {
+                        setState(() => _nombreCtrl.text = nombre);
+                      },
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 150),
+                        margin: const EdgeInsets.only(right: 8),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: seleccionada
+                              ? HuellitasTheme.lima
+                              : HuellitasTheme.arena,
+                          borderRadius: BorderRadius.circular(999),
+                          boxShadow:
+                              seleccionada ? HuellitasTheme.claySm : null,
+                        ),
+                        child: Text(
+                          nombre,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: seleccionada
+                                ? FontWeight.w700
+                                : FontWeight.w500,
+                            color: HuellitasTheme.ink,
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+              const SizedBox(height: 14),
+              const Text(
+                'O ESCRIBE EL NOMBRE',
+                style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.5,
+                    color: HuellitasTheme.inkSoft),
+              ),
+              const SizedBox(height: 8),
+            ],
+
+            // ── Campo de nombre (libre) ────────────────────────────
             TextFormField(
-              decoration:
-                  HuellitasTheme.field('Nombre de la vacuna o tratamiento'),
+              controller: _nombreCtrl,
+              decoration: HuellitasTheme.field(
+                  'Nombre de la vacuna o tratamiento'),
               textCapitalization: TextCapitalization.sentences,
               validator: (v) =>
                   (v == null || v.trim().isEmpty) ? 'Ingresa el nombre' : null,
-              onSaved: (v) => _nombre = v!.trim(),
+              onChanged: (_) => setState(() {}),
             ),
             const SizedBox(height: 12),
+
+            // ── Fechas ────────────────────────────────────────────
             _dateRow(
               label: 'Fecha de aplicación',
               value: _fechaAplicacion,
               onTap: () async {
                 final dt = await _pickDate();
-                if (dt != null) {
-                  setState(() => _fechaAplicacion = dt);
-                }
+                if (dt != null) setState(() => _fechaAplicacion = dt);
               },
             ),
             const SizedBox(height: 12),
@@ -319,9 +425,7 @@ class _AdminVacunaSheetState extends State<AdminVacunaSheet> {
               onTap: () async {
                 final dt =
                     await _pickDate(first: _fechaAplicacion ?? DateTime.now());
-                if (dt != null) {
-                  setState(() => _fechaVencimiento = dt);
-                }
+                if (dt != null) setState(() => _fechaVencimiento = dt);
               },
             ),
             const SizedBox(height: 24),
