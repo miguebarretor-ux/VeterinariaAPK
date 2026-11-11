@@ -131,7 +131,7 @@ class ClayChoice<T> extends StatelessWidget {
   }
 }
 
-class _Opcion extends StatelessWidget {
+class _Opcion extends StatefulWidget {
   final String label;
   final bool selected;
   final VoidCallback onTap;
@@ -139,11 +139,19 @@ class _Opcion extends StatelessWidget {
   const _Opcion({required this.label, required this.selected, required this.onTap});
 
   @override
+  State<_Opcion> createState() => _OpcionState();
+}
+
+class _OpcionState extends State<_Opcion> {
+  bool _conFoco = false;
+
+  @override
   Widget build(BuildContext context) {
+    final selected = widget.selected;
     final radius = BorderRadius.circular(HuellitasTheme.radiusField - 4);
     return Semantics(
-      button: true,
-      selected: selected,
+      // Se anuncia como opción de un grupo excluyente (botón de radio).
+      checked: selected,
       inMutuallyExclusiveGroup: true,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 160),
@@ -151,6 +159,12 @@ class _Opcion extends StatelessWidget {
         decoration: BoxDecoration(
           color: selected ? HuellitasTheme.lavanda : Colors.transparent,
           borderRadius: radius,
+          // El foco de teclado es un anillo, no un relleno: así no se
+          // confunde con la opción seleccionada.
+          border: Border.all(
+            color: _conFoco ? HuellitasTheme.lavandaInk : Colors.transparent,
+            width: 2,
+          ),
           boxShadow: selected
               ? [
                   BoxShadow(
@@ -165,30 +179,36 @@ class _Opcion extends StatelessWidget {
           type: MaterialType.transparency,
           child: InkWell(
             borderRadius: radius,
-            onTap: onTap,
+            focusColor: Colors.transparent,
+            hoverColor: HuellitasTheme.ink.withAlpha(10),
+            onFocusChange: (f) => setState(() => _conFoco = f),
+            onTap: widget.onTap,
             child: ConstrainedBox(
-              constraints: const BoxConstraints(minHeight: 44),
+              constraints: const BoxConstraints(minHeight: 40),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    if (selected) ...[
-                      const Icon(Icons.check_rounded, size: 18, color: HuellitasTheme.ink),
-                      const SizedBox(width: 4),
-                    ],
-                    Flexible(
-                      child: Text(
-                        label,
-                        textAlign: TextAlign.center,
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                // Con letra grande el contenido se encoge en vez de partirse
+                // en varias líneas.
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (selected) ...[
+                        const Icon(Icons.check_rounded, size: 18, color: HuellitasTheme.ink),
+                        const SizedBox(width: 4),
+                      ],
+                      Text(
+                        widget.label,
+                        maxLines: 1,
                         style: TextStyle(
                           fontSize: 15,
                           fontWeight: selected ? FontWeight.w800 : FontWeight.w700,
                           color: selected ? HuellitasTheme.ink : HuellitasTheme.inkSoft,
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -199,7 +219,8 @@ class _Opcion extends StatelessWidget {
   }
 }
 
-/// Indicador de avance: "Paso 2 de 3 · Tu cuenta" más una barra segmentada.
+/// Indicador de avance: "PASO 2 DE 3" más una barra segmentada. El título del
+/// paso se anuncia a los lectores de pantalla al cambiar.
 class PasoProgreso extends StatelessWidget {
   final int actual; // base 0
   final List<String> titulos;
@@ -211,6 +232,7 @@ class PasoProgreso extends StatelessWidget {
     final total = titulos.length;
     return Semantics(
       container: true,
+      liveRegion: true,
       label: 'Paso ${actual + 1} de $total: ${titulos[actual]}',
       child: ExcludeSemantics(
         child: Column(

@@ -131,6 +131,9 @@ class HuellitasTheme {
   static final InputDecorationTheme _inputTheme = InputDecorationTheme(
     filled: true,
     fillColor: arena,
+    // El foco lo comunica el borde; el relleno no cambia al pasar el cursor.
+    hoverColor: Colors.transparent,
+    focusColor: Colors.transparent,
     labelStyle: const TextStyle(
       fontSize: 15,
       fontWeight: FontWeight.w700,
@@ -142,7 +145,7 @@ class HuellitasTheme {
         color: states.contains(WidgetState.error)
             ? coralInk
             : states.contains(WidgetState.focused)
-                ? lavandaInk
+                ? ink
                 : inkSoft,
       ),
     ),
@@ -160,8 +163,8 @@ class HuellitasTheme {
     enabledBorder: _fieldBorder(bordeCampo, 1.2),
     disabledBorder: _fieldBorder(borde, 1.2),
     focusedBorder: _fieldBorder(lavandaInk, 2),
-    errorBorder: _fieldBorder(coral, 2),
-    focusedErrorBorder: _fieldBorder(coralInk, 2),
+    errorBorder: _fieldBorder(coralInk, 1.6),
+    focusedErrorBorder: _fieldBorder(coralInk, 2.4),
     suffixIconColor: inkSoft,
   );
 
@@ -248,6 +251,19 @@ class HuellitasTheme {
               fontWeight: FontWeight.w800,
             ),
             elevation: 0,
+          ).copyWith(
+            // Sin la sombra gris de Material al pasar el cursor o presionar:
+            // el relieve lo da la sombra clay del contenedor.
+            elevation: const WidgetStatePropertyAll(0),
+            shadowColor: const WidgetStatePropertyAll(Colors.transparent),
+            overlayColor: WidgetStateProperty.resolveWith(
+              (states) => states.contains(WidgetState.pressed)
+                  ? ink.withAlpha(28)
+                  : states.contains(WidgetState.hovered) ||
+                          states.contains(WidgetState.focused)
+                      ? ink.withAlpha(15)
+                      : null,
+            ),
           ),
         ),
 

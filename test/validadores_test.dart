@@ -5,7 +5,8 @@ import 'package:huellitas_veterinaria/validadores.dart';
 void main() {
   group('nombrePersona', () {
     test('acepta nombres con tildes, ñ y compuestos', () {
-      for (final n in ['Sofía', 'María José', 'Peña', "O'Connor", 'Ana-Lucía']) {
+      // Incluye apóstrofo tipográfico (iOS) y tilde como carácter combinado.
+      for (final n in ['Sofía', 'María José', 'Peña', "O'Connor", 'Ana-Lucía', 'D’Angelo', 'Jose\u0301']) {
         expect(Validadores.nombrePersona(n, queFalta: 'tu nombre'), isNull, reason: n);
       }
     });

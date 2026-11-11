@@ -3,7 +3,7 @@ import 'mascota_model.dart';
 /// Reglas de validación del registro. Son funciones puras: devuelven el
 /// mensaje de error que ve la persona, o `null` si el valor es válido.
 class Validadores {
-  static final RegExp _soloLetras = RegExp(r"^[\p{L}][\p{L}\s'.\-]*$", unicode: true);
+  static final RegExp _soloLetras = RegExp(r"^\p{L}[\p{L}\p{M}\s'’.\-]*$", unicode: true);
   static final RegExp _correo = RegExp(r'^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$');
   static final RegExp _digitos = RegExp(r'^\d+$');
   static final RegExp _alfanumerico = RegExp(r'^[A-Za-z0-9]+$');

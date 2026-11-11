@@ -62,6 +62,11 @@
       var c = document.getElementById('cargando');
       if (c) c.remove();
     });
+    // Si la app no arranca, que no quede cargando para siempre.
+    setTimeout(function () {
+      var c = document.getElementById('cargando');
+      if (c) c.lastChild.textContent = 'No pudimos cargar Huellitas. Revisa tu conexión y recarga la página.';
+    }, 20000);
   </script>
   <!--
     You can customize the "flutter_bootstrap.js" script.

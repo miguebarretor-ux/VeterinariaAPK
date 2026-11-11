@@ -154,7 +154,7 @@ void main() {
     await _escribir(tester, 'Peso en kg (opcional)', '2,4');
     await _tocar(tester, find.text('Crear mi cuenta'));
 
-    expect(find.text('¡Hola, Sofía!'), findsOneWidget);
+    expect(find.text('¡Listo, Sofía!'), findsOneWidget);
     expect(find.text('sofia@correo.com'), findsOneWidget);
     expect(find.text('Luna'), findsOneWidget);
     expect(find.text('Gato · 5 meses'), findsOneWidget);
@@ -180,7 +180,7 @@ void main() {
     await _llenarSobreTi(tester);
     await _llenarCuenta(tester);
 
-    expect(_campo('¿Qué animal es?'), findsNothing);
+    expect(_campo('¿Cuál?'), findsNothing);
     await _tocar(tester, find.text('Otro'));
     await _escribir(tester, 'Nombre de tu mascota', 'Copito');
     await _escribir(tester, 'Edad', '2');
@@ -196,7 +196,7 @@ void main() {
     await _tocar(tester, find.text('Años'));
     await _escribir(tester, 'Edad', '2');
 
-    await _escribir(tester, '¿Qué animal es?', 'Conejo');
+    await _escribir(tester, '¿Cuál?', 'Conejo');
     await _tocar(tester, find.text('Crear mi cuenta'));
     expect(find.text('Conejo · 2 años'), findsOneWidget);
     expect(repo.recibidos.single.mascota!.especie, 'Conejo');
@@ -212,13 +212,13 @@ void main() {
     expect(_campo('Nombre de tu mascota'), findsNothing);
     await _tocar(tester, find.text('Crear mi cuenta'));
 
-    expect(find.text('¡Hola, Sofía!'), findsOneWidget);
+    expect(find.text('¡Listo, Sofía!'), findsOneWidget);
     final json = repo.recibidos.single.toJson();
     expect(json['tieneMascota'], isFalse);
     expect(json.containsKey('mascota'), isFalse);
   });
 
-  testWidgets('si el registro falla, avisa y permite reintentar sin perder datos', (tester) async {
+  testWidgets('si el registro falla, avisa junto al botón y permite reintentar', (tester) async {
     final repo = _RepoFalso(fallosPendientes: 1);
     await tester.pumpWidget(HuellitasApp(repository: repo));
     await _llenarSobreTi(tester);
@@ -230,9 +230,82 @@ void main() {
     expect(find.text('PASO 3 DE 3'), findsOneWidget);
     expect(repo.recibidos, isEmpty);
 
+    // El aviso no sigue a la persona a otro paso.
+    await _tocar(tester, find.text('Atrás'));
+    expect(find.text('Ese correo ya tiene una cuenta.'), findsNothing);
+    expect(find.text('PASO 2 DE 3'), findsOneWidget);
+    await _tocar(tester, find.text('Continuar'));
+
     await _tocar(tester, find.text('Crear mi cuenta'));
-    expect(find.text('¡Hola, Sofía!'), findsOneWidget);
+    expect(find.text('¡Listo, Sofía!'), findsOneWidget);
+    expect(find.text('Ese correo ya tiene una cuenta.'), findsNothing);
     expect(repo.recibidos, hasLength(1));
+  });
+
+  testWidgets('tras un fallo el botón pasa a "Reintentar" y envía de nuevo', (tester) async {
+    final repo = _RepoFalso(fallosPendientes: 1);
+    await tester.pumpWidget(HuellitasApp(repository: repo));
+    await _llenarSobreTi(tester);
+    await _llenarCuenta(tester);
+    await _tocar(tester, find.text('Todavía no'));
+    await _tocar(tester, find.text('Crear mi cuenta'));
+
+    await _tocar(tester, find.text('Reintentar'));
+    expect(find.text('¡Listo, Sofía!'), findsOneWidget);
+    expect(repo.recibidos, hasLength(1));
+  });
+
+  testWidgets('el cursor va al primer campo con error en orden de pantalla', (tester) async {
+    await tester.pumpWidget(HuellitasApp(repository: _RepoFalso()));
+    await _llenarSobreTi(tester);
+    await _llenarCuenta(tester);
+
+    await _escribir(tester, 'Nombre de tu mascota', 'Copito');
+    await _tocar(tester, find.text('Otro'));
+    await _tocar(tester, find.text('Crear mi cuenta'));
+
+    // "¿Cuál?" aparece después que "Edad" pero está más arriba.
+    final especie = tester.widget<EditableText>(
+      find.descendant(of: _campo('¿Cuál?'), matching: find.byType(EditableText)),
+    );
+    expect(especie.focusNode.hasFocus, isTrue);
+  });
+
+  testWidgets('el atrás del sistema retrocede un paso sin perder datos', (tester) async {
+    await tester.pumpWidget(HuellitasApp(repository: _RepoFalso()));
+    await _llenarSobreTi(tester);
+    expect(find.text('PASO 2 DE 3'), findsOneWidget);
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.text('PASO 1 DE 3'), findsOneWidget);
+    expect(find.text('Sofía'), findsOneWidget);
+  });
+
+  testWidgets('pantalla pequeña con letra grande: nada se desborda', (tester) async {
+    tester.view.physicalSize = const Size(320, 568);
+    tester.view.devicePixelRatio = 1;
+    tester.platformDispatcher.textScaleFactorTestValue = 2;
+    addTearDown(tester.view.reset);
+    addTearDown(tester.platformDispatcher.clearAllTestValues);
+
+    final repo = _RepoFalso(fallosPendientes: 1);
+    await tester.pumpWidget(HuellitasApp(repository: repo));
+    await _tocar(tester, find.text('Continuar')); // errores del paso 1
+    await _llenarSobreTi(tester);
+    await _tocar(tester, find.text('Continuar')); // errores del paso 2
+    await _llenarCuenta(tester);
+    await _tocar(tester, find.text('Crear mi cuenta')); // errores del paso 3
+    await _tocar(tester, find.text('Otro'));
+    await _escribir(tester, 'Nombre de tu mascota', 'Copito');
+    await _escribir(tester, '¿Cuál?', 'Conejo');
+    await _escribir(tester, 'Edad', '2');
+    await _tocar(tester, find.text('Crear mi cuenta')); // aviso de fallo
+    expect(find.text('Ese correo ya tiene una cuenta.'), findsOneWidget);
+    expect(find.byTooltip('Atrás'), findsOneWidget);
+    await _tocar(tester, find.text('Reintentar'));
+    expect(find.text('¡Listo, Sofía!'), findsOneWidget);
+    // Cualquier RenderFlex desbordado habría hecho fallar la prueba.
   });
 
   testWidgets('mientras se envía, el botón se bloquea para evitar registros dobles', (tester) async {
@@ -250,6 +323,6 @@ void main() {
     expect(tester.widget<ElevatedButton>(find.byType(ElevatedButton)).onPressed, isNull);
 
     await tester.pumpAndSettle(const Duration(seconds: 1));
-    expect(find.text('¡Hola, Sofía!'), findsOneWidget);
+    expect(find.text('¡Listo, Sofía!'), findsOneWidget);
   });
 }

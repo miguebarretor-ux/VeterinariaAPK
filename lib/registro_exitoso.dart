@@ -12,10 +12,16 @@ class RegistroExitosoPage extends StatelessWidget {
   final UsuarioModel usuario;
   final RegistroRepository repository;
 
+  /// Lleva al inicio de la app. Mientras no exista esa pantalla se deja en
+  /// `null` y no se muestra el botón principal, para no prometer un destino
+  /// que no hay.
+  final VoidCallback? onContinuar;
+
   const RegistroExitosoPage({
     super.key,
     required this.usuario,
     this.repository = const RegistroSimuladoRepository(),
+    this.onContinuar,
   });
 
   @override
@@ -46,7 +52,7 @@ class RegistroExitosoPage extends StatelessWidget {
                     header: true,
                     liveRegion: true,
                     child: Text(
-                      '¡Hola, ${usuario.nombre}!',
+                      '¡Listo, ${usuario.nombre}!',
                       textAlign: TextAlign.center,
                       style: textos.displayLarge!.copyWith(fontSize: 34),
                     ),
@@ -55,7 +61,7 @@ class RegistroExitosoPage extends StatelessWidget {
                   Text(
                     'Tu cuenta en Huellitas ya está creada.',
                     textAlign: TextAlign.center,
-                    style: textos.bodyLarge!.copyWith(color: HuellitasTheme.inkSoft),
+                    style: textos.bodyLarge,
                   ),
                   const SizedBox(height: 28),
                   ClayCard(
@@ -83,14 +89,20 @@ class RegistroExitosoPage extends StatelessWidget {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 32),
-                  ClayButton(
-                    label: 'Entendido',
+                  const SizedBox(height: 28),
+                  if (onContinuar != null) ...[
+                    ClayButton(label: 'Ir al inicio', onPressed: onContinuar),
+                    const SizedBox(height: 8),
+                  ],
+                  // Acción secundaria y con nombre explícito: abre un
+                  // formulario nuevo, no "continúa" a ninguna parte.
+                  TextButton(
                     onPressed: () => Navigator.of(context).pushReplacement(
                       MaterialPageRoute<void>(
                         builder: (_) => FormularioRegistroPage(repository: repository),
                       ),
                     ),
+                    child: const Text('Registrar otra cuenta'),
                   ),
                 ],
               ),
