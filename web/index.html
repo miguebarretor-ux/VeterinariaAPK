@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="es">
 <head>
   <!--
     If you are serving your web app in a path other than the root, change the
@@ -18,21 +18,51 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="description" content="Huellitas Veterinaria: citas, carnet y registro para tu mascota.">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="huellitas_veterinaria">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Huellitas">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>huellitas_veterinaria</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#F7F3EE">
+
+  <title>Huellitas Veterinaria</title>
   <link rel="manifest" href="manifest.json">
+
+  <!-- Pantalla de carga: evita la página en blanco mientras arranca Flutter. -->
+  <style>
+    html, body { height: 100%; margin: 0; background: #F7F3EE; }
+    #cargando {
+      position: fixed; inset: 0;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px;
+      font: 700 17px/1.2 system-ui, sans-serif; color: #3A3350;
+    }
+    #cargando .punto {
+      width: 56px; height: 56px; border-radius: 50%; background: #C9BCEB;
+      box-shadow: 7px 8px 16px rgba(58, 51, 80, 0.12), -4px -5px 12px rgba(255, 255, 255, 0.9);
+      animation: latido 1.2s ease-in-out infinite;
+    }
+    @keyframes latido { 50% { transform: scale(0.82); } }
+    @media (prefers-reduced-motion: reduce) { #cargando .punto { animation: none; } }
+  </style>
 </head>
 <body>
+  <div id="cargando" role="status">
+    <div class="punto" aria-hidden="true"></div>
+    Cargando Huellitas…
+  </div>
+  <script>
+    window.addEventListener('flutter-first-frame', function () {
+      var c = document.getElementById('cargando');
+      if (c) c.remove();
+    });
+  </script>
   <!--
     You can customize the "flutter_bootstrap.js" script.
     This is useful to provide a custom configuration to the Flutter loader

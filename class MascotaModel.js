@@ -2,13 +2,17 @@ class MascotaModel {
   constructor({
     nombre = '',
     tipo = 'Perro',
+    especie = null, // solo cuando tipo === 'Otro'
     edad = 0,
+    unidadEdad = 'años', // 'años' o 'meses'
     peso = null,
     raza = '',
   } = {}) {
     this.nombre = nombre;
     this.tipo = tipo;
+    this.especie = especie;
     this.edad = edad;
+    this.unidadEdad = unidadEdad;
     this.peso = peso;
     this.raza = raza;
   }
@@ -18,8 +22,13 @@ class MascotaModel {
       nombre: this.nombre,
       tipo: this.tipo,
       edad: this.edad,
+      unidadEdad: this.unidadEdad,
       raza: this.raza,
     };
+
+    if (this.tipo === 'Otro' && this.especie !== null && this.especie !== undefined) {
+      json.especie = this.especie;
+    }
 
     if (this.peso !== null && this.peso !== undefined) {
       json.peso = this.peso;

@@ -8,6 +8,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
 
 dev_dependencies:
   flutter_test:
@@ -16,3 +18,24 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+  # Tipografías de la marca (SIL Open Font License, ver assets/fonts/OFL-*.txt)
+  fonts:
+    - family: Bitter
+      fonts:
+        - asset: assets/fonts/bitter-600.ttf
+          weight: 600
+        - asset: assets/fonts/bitter-700.ttf
+          weight: 700
+        - asset: assets/fonts/bitter-800.ttf
+          weight: 800
+    - family: Nunito
+      fonts:
+        - asset: assets/fonts/nunito-400.ttf
+          weight: 400
+        - asset: assets/fonts/nunito-600.ttf
+          weight: 600
+        - asset: assets/fonts/nunito-700.ttf
+          weight: 700
+        - asset: assets/fonts/nunito-800.ttf
+          weight: 800

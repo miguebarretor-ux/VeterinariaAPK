@@ -39,6 +39,17 @@
   --color-coral: #F49E8C;   /* Alertas, errores (máx 1 por vista)*/
   --color-menta: #A9D9C6;   /* Éxito, estado "al día"            */
 
+  /*
+   * Variantes "ink": los pasteles no alcanzan contraste AA (4.5:1) como
+   * texto ni 3:1 como indicador de foco sobre arena/leche. Para texto de
+   * error, foco/progreso y texto de éxito se usan estas versiones profundas.
+   */
+  --color-coral-ink:   #B5432E;   /* Texto de error                 */
+  --color-lavanda-ink: #7A68C4;   /* Foco, progreso                 */
+  --color-menta-ink:   #2F6B55;   /* Texto e iconos de éxito        */
+  --color-borde:       #DCD5E3;   /* Divisores, pista de progreso   */
+  --color-borde-campo: #8E86A6;   /* Contorno de campos (3.4:1)     */
+
 
   /* ─── RADIOS ──────────────────────────────────────────────── */
 
@@ -118,8 +129,13 @@
    --color-lima     #E5E9A8    HuellitasTheme.lima     0xFFE5E9A8
    --color-coral    #F49E8C    HuellitasTheme.coral    0xFFF49E8C
    --color-menta    #A9D9C6    HuellitasTheme.menta    0xFFA9D9C6
+   --color-coral-ink   #B5432E HuellitasTheme.coralInk   0xFFB5432E
+   --color-lavanda-ink #7A68C4 HuellitasTheme.lavandaInk 0xFF7A68C4
+   --color-menta-ink   #2F6B55 HuellitasTheme.mentaInk   0xFF2F6B55
+   --color-borde       #DCD5E3 HuellitasTheme.borde      0xFFDCD5E3
+   --color-borde-campo #8E86A6 HuellitasTheme.bordeCampo 0xFF8E86A6
 
-   --shadow-clay-in            HuellitasTheme.clayIn   (BlurStyle.inner)
+   --shadow-clay-in            (sin equivalente: campos arena sobre tarjeta leche)
    --shadow-clay-sm            HuellitasTheme.claySm
    --shadow-clay               HuellitasTheme.clay
    --shadow-clay-xl            HuellitasTheme.clayXl
@@ -129,8 +145,7 @@
    border-radius: 44px         BorderRadius.circular(44)
    border-radius: 999px        BorderRadius.circular(999) o StadiumBorder
 
-   font-family: 'Bitter'       Requiere paquete google_fonts:
-                                GoogleFonts.bitter(...)
-   font-family: 'Nunito'       GoogleFonts.nunito(...)
+   font-family: 'Bitter'       HuellitasTheme.fontDisplay (assets/fonts)
+   font-family: 'Nunito'       HuellitasTheme.fontBody    (assets/fonts)
 
    ════════════════════════════════════════════════════════════════ */
