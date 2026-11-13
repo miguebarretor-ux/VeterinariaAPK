@@ -34,7 +34,9 @@ class Validadores {
       if (v.length < 5 || v.length > 12) return 'El pasaporte tiene entre 5 y 12 caracteres';
       return null;
     }
-    if (!_digitos.hasMatch(v)) return 'Usa solo números, sin puntos ni espacios';
+    if (!_digitos.hasMatch(v)) {
+      return 'Aquí van solo números. Si es un pasaporte, cambia el tipo de documento.';
+    }
     if (v.length < 6 || v.length > 11) return 'Debe tener entre 6 y 11 dígitos';
     return null;
   }
@@ -65,17 +67,20 @@ class Validadores {
     return null;
   }
 
-  static String? edad(String? valor, String unidad) {
+  /// [tipo] ajusta el máximo razonable: perros y gatos no pasan de 40 años;
+  /// otras especies (loros, tortugas) pueden vivir mucho más.
+  static String? edad(String? valor, String unidad, {String? tipo}) {
     final v = valor?.trim() ?? '';
     if (v.isEmpty) return 'Escribe la edad';
     final n = int.tryParse(v);
     if (n == null || n < 0) return 'Usa un número entero';
     if (unidad == Opciones.meses) {
-      if (n > 23) return 'Para 2 años o más, cambia a años';
+      if (n > 23) return 'Desde los 2 años, escribe la edad en años';
       return null;
     }
     if (n == 0) return 'Si tiene menos de un año, cambia a meses';
-    if (n > 100) return 'Revisa la edad';
+    final maximo = (tipo == null || tipo == Opciones.otraMascota) ? 100 : 40;
+    if (n > maximo) return 'Revisa la edad: parece demasiado alta';
     return null;
   }
 

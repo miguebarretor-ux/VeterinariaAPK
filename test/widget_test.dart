@@ -73,18 +73,29 @@ void main() {
     expect(find.text('Escribe tu nombre'), findsNothing);
   });
 
-  testWidgets('el número de documento solo acepta dígitos salvo en pasaporte', (tester) async {
+  testWidgets('el documento quita puntos y espacios, y avisa si hay letras en una cédula', (tester) async {
     await tester.pumpWidget(HuellitasApp(repository: _RepoFalso()));
+    await _escribir(tester, 'Nombre', 'Sofía');
+    await _escribir(tester, 'Apellido', 'Peña');
 
-    await _escribir(tester, 'Número de documento', 'AB12.345 678');
-    expect(find.text('12345678'), findsOneWidget);
+    await _escribir(tester, 'Número de documento', '10.203 040');
+    expect(find.text('10203040'), findsOneWidget);
 
+    // Las letras no se descartan en silencio: se explica qué hacer.
+    await _escribir(tester, 'Número de documento', 'ab123456');
+    expect(find.text('AB123456'), findsOneWidget);
+    await _tocar(tester, find.text('Continuar'));
+    expect(find.textContaining('Si es un pasaporte'), findsOneWidget);
+    expect(find.text('PASO 1 DE 3'), findsOneWidget);
+
+    // Al cambiar a pasaporte el mismo número pasa a ser válido.
     await _tocar(tester, find.text('Cédula de ciudadanía'));
     await tester.tap(find.text('Pasaporte').last);
     await tester.pumpAndSettle();
-    await _escribir(tester, 'Número de documento', 'AB12.345 678');
-    expect(find.text('AB12345678'), findsOneWidget);
+    expect(find.textContaining('Si es un pasaporte'), findsNothing);
     expect(find.text('Letras y números, sin espacios'), findsOneWidget);
+    await _tocar(tester, find.text('Continuar'));
+    expect(find.text('PASO 2 DE 3'), findsOneWidget);
   });
 
   testWidgets('la contraseña muestra requisitos en vivo y valida la confirmación', (tester) async {
@@ -157,7 +168,7 @@ void main() {
     expect(find.text('¡Listo, Sofía!'), findsOneWidget);
     expect(find.text('sofia@correo.com'), findsOneWidget);
     expect(find.text('Luna'), findsOneWidget);
-    expect(find.text('Gato · 5 meses'), findsOneWidget);
+    expect(find.text('Gato · 5 meses · 2,4 kg'), findsOneWidget);
 
     final json = repo.recibidos.single.toJson();
     expect(json['nombre'], 'Sofía');

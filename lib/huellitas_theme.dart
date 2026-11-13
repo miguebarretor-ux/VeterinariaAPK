@@ -255,6 +255,12 @@ class HuellitasTheme {
             // Sin la sombra gris de Material al pasar el cursor o presionar:
             // el relieve lo da la sombra clay del contenedor.
             elevation: const WidgetStatePropertyAll(0),
+            // Anillo visible al llegar con teclado.
+            side: WidgetStateProperty.resolveWith(
+              (states) => states.contains(WidgetState.focused)
+                  ? const BorderSide(color: ink, width: 2)
+                  : BorderSide.none,
+            ),
             shadowColor: const WidgetStatePropertyAll(Colors.transparent),
             overlayColor: WidgetStateProperty.resolveWith(
               (states) => states.contains(WidgetState.pressed)

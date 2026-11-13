@@ -46,6 +46,14 @@ class MascotaModel {
     return edad == 1 ? '1 año' : '$edad años';
   }
 
+  /// Peso listo para mostrar con coma decimal: "12,5 kg", "4 kg".
+  String? get pesoLegible {
+    final p = peso;
+    if (p == null) return null;
+    final texto = p == p.roundToDouble() ? p.toStringAsFixed(0) : p.toString();
+    return '${texto.replaceAll('.', ',')} kg';
+  }
+
   /// Especie lista para mostrar: "Perro", "Gato" o la especie escrita.
   String get tipoLegible {
     final otra = especie?.trim() ?? '';

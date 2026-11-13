@@ -83,6 +83,7 @@ class RegistroExitosoPage extends StatelessWidget {
                               mascota.tipoLegible,
                               mascota.edadLegible,
                               if (mascota.raza.isNotEmpty) mascota.raza,
+                              if (mascota.pesoLegible != null) mascota.pesoLegible!,
                             ].join(' · '),
                           ),
                         ],

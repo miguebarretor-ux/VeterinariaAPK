@@ -51,6 +51,7 @@ class _FormularioRegistroPageState extends State<FormularioRegistroPage> {
   bool _tieneMascota = true;
   final _mascotaNombreCtrl = TextEditingController();
   final _mascotaEspecieCtrl = TextEditingController();
+  final _focoEspecie = FocusNode();
   final _mascotaEdadCtrl = TextEditingController();
   final _mascotaPesoCtrl = TextEditingController();
   final _mascotaRazaCtrl = TextEditingController();
@@ -96,6 +97,7 @@ class _FormularioRegistroPageState extends State<FormularioRegistroPage> {
     ]) {
       c.dispose();
     }
+    _focoEspecie.dispose();
     _scrollCtrl.dispose();
     super.dispose();
   }
@@ -109,6 +111,7 @@ class _FormularioRegistroPageState extends State<FormularioRegistroPage> {
     setState(() {
       _paso = paso;
       _errorEnvio = null;
+      _verContrasena = false; // al volver, la contraseña vuelve a ocultarse
     });
     if (_scrollCtrl.hasClients) _scrollCtrl.jumpTo(0);
   }
@@ -143,24 +146,35 @@ class _FormularioRegistroPageState extends State<FormularioRegistroPage> {
   /// Lleva a la vista el primer campo con error y deja el cursor en él, para
   /// corregirlo sin tener que buscarlo.
   void _mostrarPrimerError(BuildContext campo) {
-    Scrollable.ensureVisible(
-      campo,
-      alignment: 0.2,
-      duration: const Duration(milliseconds: 250),
-    );
-    FocusNode? foco;
+    EditableText? texto;
     void buscar(Element e) {
-      if (foco != null) return;
+      if (texto != null) return;
       final w = e.widget;
       if (w is EditableText) {
-        foco = w.focusNode;
+        texto = w;
       } else {
         e.visitChildren(buscar);
       }
     }
 
     (campo as Element).visitChildren(buscar);
-    foco?.requestFocus();
+    texto?.focusNode.requestFocus();
+
+    // Tras el siguiente cuadro el mensaje de error ya ocupa su lugar: ahí se
+    // desplaza para que campo y mensaje queden a la vista, y el cursor va al
+    // final para completar lo escrito en vez de reemplazarlo.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!campo.mounted) return;
+      Scrollable.ensureVisible(
+        campo,
+        alignment: 0.25,
+        duration: const Duration(milliseconds: 250),
+      );
+      final control = texto?.controller;
+      if (control != null) {
+        control.selection = TextSelection.collapsed(offset: control.text.length);
+      }
+    });
   }
 
   // ─── ENVÍO ─────────────────────────────────────────────────────────────────
@@ -179,9 +193,8 @@ class _FormularioRegistroPageState extends State<FormularioRegistroPage> {
           : MascotaModel(
               nombre: _mascotaNombreCtrl.text.trim(),
               tipo: _mascotaTipo,
-              especie: _mascotaTipo == Opciones.otraMascota
-                  ? _mascotaEspecieCtrl.text.trim()
-                  : null,
+              especie:
+                  _mascotaTipo == Opciones.otraMascota ? _mascotaEspecieCtrl.text.trim() : null,
               edad: int.parse(_mascotaEdadCtrl.text.trim()),
               unidadEdad: _unidadEdad,
               peso: Validadores.leerPeso(_mascotaPesoCtrl.text),
@@ -346,42 +359,52 @@ class _FormularioRegistroPageState extends State<FormularioRegistroPage> {
                 _AvisoError(_errorEnvio!),
                 const SizedBox(height: 12),
               ],
-              Row(
-                children: [
-                  if (_paso > 0) ...[
-                    // Con letra grande o pantalla angosta queda solo la
-                    // flecha, para no quitarle espacio al botón principal.
-                    if (MediaQuery.sizeOf(context).width /
-                            MediaQuery.textScalerOf(context).scale(1) <
-                        360)
-                      IconButton(
-                        onPressed: _enviando ? null : _atras,
-                        icon: const Icon(Icons.arrow_back_rounded),
-                        color: HuellitasTheme.ink,
-                        tooltip: 'Atrás',
-                      )
-                    else
-                      TextButton.icon(
-                        onPressed: _enviando ? null : _atras,
-                        icon: const Icon(Icons.arrow_back_rounded, size: 20),
-                        label: const Text('Atrás'),
+              // Con teclado, tras el último campo sigue la acción principal
+              // y después "Atrás", aunque en pantalla "Atrás" va primero.
+              FocusTraversalGroup(
+                policy: OrderedTraversalPolicy(),
+                child: Row(
+                  children: [
+                    if (_paso > 0) ...[
+                      // Con letra grande o pantalla angosta queda solo la
+                      // flecha, para no quitarle espacio al botón principal.
+                      FocusTraversalOrder(
+                        order: const NumericFocusOrder(2),
+                        child: MediaQuery.sizeOf(context).width /
+                                    MediaQuery.textScalerOf(context).scale(1) <
+                                360
+                            ? IconButton(
+                                onPressed: _enviando ? null : _atras,
+                                icon: const Icon(Icons.arrow_back_rounded),
+                                color: HuellitasTheme.ink,
+                                tooltip: 'Atrás',
+                              )
+                            : TextButton.icon(
+                                onPressed: _enviando ? null : _atras,
+                                icon: const Icon(Icons.arrow_back_rounded, size: 20),
+                                label: const Text('Atrás'),
+                              ),
                       ),
-                    const SizedBox(width: 8),
-                  ],
-                  Expanded(
-                    child: ClayButton(
-                      label: !_esUltimoPaso
-                          ? 'Continuar'
-                          : _errorEnvio != null
-                              ? 'Reintentar'
-                              : 'Crear mi cuenta',
-                      labelCargando: 'Creando tu cuenta…',
-                      icon: _esUltimoPaso ? null : Icons.arrow_forward_rounded,
-                      cargando: _enviando,
-                      onPressed: _continuar,
+                      const SizedBox(width: 8),
+                    ],
+                    Expanded(
+                      child: FocusTraversalOrder(
+                        order: const NumericFocusOrder(1),
+                        child: ClayButton(
+                          label: !_esUltimoPaso
+                              ? 'Continuar'
+                              : _errorEnvio != null
+                                  ? 'Reintentar'
+                                  : 'Crear mi cuenta',
+                          labelCargando: 'Creando tu cuenta…',
+                          icon: _esUltimoPaso ? null : Icons.arrow_forward_rounded,
+                          cargando: _enviando,
+                          onPressed: _continuar,
+                        ),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ],
           ),
@@ -392,12 +415,17 @@ class _FormularioRegistroPageState extends State<FormularioRegistroPage> {
 
   static const _espacio = SizedBox(height: 14);
 
+  /// Al enfocar un campo se deja margen para que su ayuda o su error también
+  /// queden a la vista, por encima de la barra de acciones.
+  static const _margenScroll = EdgeInsets.fromLTRB(20, 20, 20, 64);
+
   // ── PASO 1: SOBRE TI ─────────────────────────────────────────────────────
 
   List<Widget> _camposSobreTi() {
     return [
       TextFormField(
         controller: _nombreCtrl,
+        scrollPadding: _margenScroll,
         decoration: HuellitasTheme.field('Nombre'),
         textCapitalization: TextCapitalization.words,
         textInputAction: TextInputAction.next,
@@ -407,6 +435,7 @@ class _FormularioRegistroPageState extends State<FormularioRegistroPage> {
       _espacio,
       TextFormField(
         controller: _apellidoCtrl,
+        scrollPadding: _margenScroll,
         decoration: HuellitasTheme.field('Apellido'),
         textCapitalization: TextCapitalization.words,
         textInputAction: TextInputAction.next,
@@ -445,20 +474,21 @@ class _FormularioRegistroPageState extends State<FormularioRegistroPage> {
       _espacio,
       TextFormField(
         controller: _documentoCtrl,
+        scrollPadding: _margenScroll,
         decoration: HuellitasTheme.field(
           'Número de documento',
           helper: _esPasaporte ? 'Letras y números, sin espacios' : 'Solo números, sin puntos',
         ),
         keyboardType: _esPasaporte ? TextInputType.visiblePassword : TextInputType.number,
-        textCapitalization:
-            _esPasaporte ? TextCapitalization.characters : TextCapitalization.none,
+        textCapitalization: _esPasaporte ? TextCapitalization.characters : TextCapitalization.none,
         textInputAction: TextInputAction.done,
         autocorrect: false,
         enableSuggestions: false,
         inputFormatters: [
-          FilteringTextInputFormatter.allow(
-            _esPasaporte ? RegExp(r'[A-Za-z0-9]') : RegExp(r'\d'),
-          ),
+          // Las letras no se descartan en silencio aunque el tipo sea cédula:
+          // el validador explica qué hacer (p. ej. cambiar a pasaporte).
+          FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9]')),
+          const _Mayusculas(),
           LengthLimitingTextInputFormatter(12),
         ],
         validator: (v) => Validadores.documento(_tipoDocumento, v),
@@ -480,6 +510,7 @@ class _FormularioRegistroPageState extends State<FormularioRegistroPage> {
     return [
       TextFormField(
         controller: _correoCtrl,
+        scrollPadding: _margenScroll,
         decoration: HuellitasTheme.field(
           'Correo electrónico',
           hint: 'nombre@correo.com',
@@ -495,6 +526,7 @@ class _FormularioRegistroPageState extends State<FormularioRegistroPage> {
       _espacio,
       TextFormField(
         controller: _contrasenaCtrl,
+        scrollPadding: _margenScroll,
         decoration: HuellitasTheme.field(
           'Contraseña',
           suffixIcon: Padding(
@@ -517,6 +549,7 @@ class _FormularioRegistroPageState extends State<FormularioRegistroPage> {
       _espacio,
       TextFormField(
         controller: _confirmarCtrl,
+        scrollPadding: _margenScroll,
         decoration: HuellitasTheme.field('Repite la contraseña'),
         obscureText: !_verContrasena,
         textInputAction: TextInputAction.done,
@@ -547,20 +580,17 @@ class _FormularioRegistroPageState extends State<FormularioRegistroPage> {
         const SizedBox(height: 16),
         Text(
           'No hay problema. Crea tu cuenta y listo.',
-          style: Theme.of(context)
-              .textTheme
-              .bodyMedium!
-              .copyWith(color: HuellitasTheme.inkSoft),
+          style: Theme.of(context).textTheme.bodyMedium!.copyWith(color: HuellitasTheme.inkSoft),
         ),
       ] else ...[
         const SizedBox(height: 18),
         TextFormField(
           controller: _mascotaNombreCtrl,
+          scrollPadding: _margenScroll,
           decoration: HuellitasTheme.field('Nombre de tu mascota'),
           textCapitalization: TextCapitalization.words,
           textInputAction: TextInputAction.next,
-          validator: (v) =>
-              Validadores.obligatorio(v, mensaje: 'Escribe el nombre de tu mascota'),
+          validator: (v) => Validadores.obligatorio(v, mensaje: 'Escribe el nombre de tu mascota'),
         ),
         const SizedBox(height: 18),
         const _EtiquetaGrupo('¿Qué animal es?'),
@@ -569,17 +599,22 @@ class _FormularioRegistroPageState extends State<FormularioRegistroPage> {
           options: Opciones.tiposMascota,
           value: _mascotaTipo,
           labelOf: (t) => t,
-          onChanged: (t) => setState(() => _mascotaTipo = t),
+          onChanged: (t) {
+            setState(() => _mascotaTipo = t);
+            // Al elegir "Otro" se puede escribir la especie de inmediato.
+            if (t == Opciones.otraMascota) _focoEspecie.requestFocus();
+          },
         ),
         if (esOtro) ...[
           _espacio,
           TextFormField(
             controller: _mascotaEspecieCtrl,
+            focusNode: _focoEspecie,
+            scrollPadding: _margenScroll,
             decoration: HuellitasTheme.field('¿Cuál?', hint: 'Conejo, ave, hámster…'),
             textCapitalization: TextCapitalization.sentences,
             textInputAction: TextInputAction.next,
-            validator: (v) =>
-                Validadores.obligatorio(v, mensaje: 'Cuéntanos qué animal es'),
+            validator: (v) => Validadores.obligatorio(v, mensaje: 'Cuéntanos qué animal es'),
           ),
         ],
         const SizedBox(height: 18),
@@ -588,7 +623,11 @@ class _FormularioRegistroPageState extends State<FormularioRegistroPage> {
         // todo el ancho en vez de quedar apretado bajo el campo angosto.
         FormField<String>(
           initialValue: _mascotaEdadCtrl.text,
-          validator: (_) => Validadores.edad(_mascotaEdadCtrl.text, _unidadEdad),
+          validator: (_) => Validadores.edad(
+            _mascotaEdadCtrl.text,
+            _unidadEdad,
+            tipo: _mascotaTipo,
+          ),
           builder: (estado) => Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -600,6 +639,7 @@ class _FormularioRegistroPageState extends State<FormularioRegistroPage> {
                     container: true,
                     child: TextField(
                       controller: _mascotaEdadCtrl,
+                      scrollPadding: _margenScroll,
                       decoration: HuellitasTheme.field('Edad').copyWith(
                         // Borde de error sin repetir el texto dentro del campo.
                         error: estado.hasError ? const SizedBox.shrink() : null,
@@ -649,7 +689,7 @@ class _FormularioRegistroPageState extends State<FormularioRegistroPage> {
               ),
               if (estado.hasError)
                 Padding(
-                  padding: const EdgeInsets.only(left: 22, top: 6),
+                  padding: const EdgeInsets.only(left: 26, top: 6),
                   child: Semantics(
                     liveRegion: true,
                     child: Text(
@@ -664,6 +704,7 @@ class _FormularioRegistroPageState extends State<FormularioRegistroPage> {
         _espacio,
         TextFormField(
           controller: _mascotaRazaCtrl,
+          scrollPadding: _margenScroll,
           decoration: HuellitasTheme.field(
             'Raza (opcional)',
             helper: 'Si no la sabes, déjala en blanco.',
@@ -674,6 +715,7 @@ class _FormularioRegistroPageState extends State<FormularioRegistroPage> {
         _espacio,
         TextFormField(
           controller: _mascotaPesoCtrl,
+          scrollPadding: _margenScroll,
           decoration: HuellitasTheme.field('Peso en kg (opcional)', hint: 'Ej.: 4,5'),
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           textInputAction: TextInputAction.done,
@@ -686,6 +728,16 @@ class _FormularioRegistroPageState extends State<FormularioRegistroPage> {
         ),
       ],
     ];
+  }
+}
+
+/// Convierte a mayúsculas lo escrito (números de pasaporte).
+class _Mayusculas extends TextInputFormatter {
+  const _Mayusculas();
+
+  @override
+  TextEditingValue formatEditUpdate(TextEditingValue anterior, TextEditingValue nuevo) {
+    return nuevo.copyWith(text: nuevo.text.toUpperCase());
   }
 }
 

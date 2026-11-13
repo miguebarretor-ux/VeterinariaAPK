@@ -73,6 +73,9 @@ void main() {
       expect(Validadores.edad('', Opciones.anios), 'Escribe la edad');
       expect(Validadores.edad('0', Opciones.anios), contains('meses'));
       expect(Validadores.edad('101', Opciones.anios), isNotNull);
+      // Perros y gatos: máximo 40; otras especies pueden vivir más.
+      expect(Validadores.edad('41', Opciones.anios, tipo: 'Perro'), isNotNull);
+      expect(Validadores.edad('41', Opciones.anios, tipo: 'Otro'), isNull);
       expect(Validadores.edad('tres', Opciones.anios), isNotNull);
     });
 
@@ -108,6 +111,9 @@ void main() {
       expect(MascotaModel(edad: 0, unidadEdad: Opciones.meses).edadLegible, 'menos de 1 mes');
       expect(MascotaModel(tipo: 'Otro', especie: 'Conejo').tipoLegible, 'Conejo');
       expect(MascotaModel(tipo: 'Gato', especie: 'Conejo').tipoLegible, 'Gato');
+      expect(MascotaModel(peso: 12.5).pesoLegible, '12,5 kg');
+      expect(MascotaModel(peso: 4).pesoLegible, '4 kg');
+      expect(MascotaModel().pesoLegible, isNull);
     });
 
     test('toJson incluye especie solo para "Otro" y omite peso vacío', () {
