@@ -2,20 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'huellitas_theme.dart';
-import 'registro.dart';
+import 'bienvenida.dart';
 import 'registro_repository.dart';
 
 void main() {
-  runApp(const HuellitasApp());
+  runApp(HuellitasApp());
 }
 
 class HuellitasApp extends StatelessWidget {
   final RegistroRepository repository;
 
-  const HuellitasApp({
-    super.key,
-    this.repository = const RegistroSimuladoRepository(),
-  });
+  HuellitasApp({super.key, RegistroRepository? repository})
+      : repository = repository ?? RegistroSimuladoRepository();
 
   @override
   Widget build(BuildContext context) {
@@ -28,7 +26,7 @@ class HuellitasApp extends StatelessWidget {
       locale: const Locale('es'),
       supportedLocales: const [Locale('es')],
       localizationsDelegates: GlobalMaterialLocalizations.delegates,
-      home: FormularioRegistroPage(repository: repository),
+      home: BienvenidaPage(repository: repository),
     );
   }
 }

@@ -33,6 +33,9 @@ class ClayButton extends StatelessWidget {
   final bool cargando;
   final IconData? icon;
 
+  /// Variante color leche para la segunda acción de una pantalla.
+  final bool secundario;
+
   const ClayButton({
     super.key,
     required this.label,
@@ -40,6 +43,7 @@ class ClayButton extends StatelessWidget {
     this.labelCargando,
     this.cargando = false,
     this.icon,
+    this.secundario = false,
   });
 
   @override
@@ -52,6 +56,12 @@ class ClayButton extends StatelessWidget {
         boxShadow: activo ? HuellitasTheme.claySm : const [],
       ),
       child: ElevatedButton(
+        style: secundario
+            ? ElevatedButton.styleFrom(
+                backgroundColor: HuellitasTheme.leche,
+                disabledBackgroundColor: HuellitasTheme.leche,
+              )
+            : null,
         onPressed: activo ? onPressed : null,
         child: cargando
             ? Row(
@@ -261,6 +271,109 @@ class PasoProgreso extends StatelessWidget {
                   ),
                 ],
               ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Aviso de un error del servidor o de conexión, junto al botón que reintenta.
+class AvisoError extends StatelessWidget {
+  final String mensaje;
+  const AvisoError(this.mensaje, {super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      container: true,
+      liveRegion: true,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(14, 12, 16, 12),
+        decoration: BoxDecoration(
+          color: HuellitasTheme.coral.withAlpha(56),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: HuellitasTheme.coralInk, width: 1.2),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.error_outline_rounded, size: 20, color: HuellitasTheme.coralInk),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                mensaje,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: HuellitasTheme.ink,
+                  height: 1.35,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Fila de resumen: icono, título pequeño, valor y detalle opcional.
+class DatoCuenta extends StatelessWidget {
+  final IconData icon;
+  final String titulo;
+  final String valor;
+  final String? detalle;
+
+  const DatoCuenta({
+    super.key,
+    required this.icon,
+    required this.titulo,
+    required this.valor,
+    this.detalle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final textos = Theme.of(context).textTheme;
+    return MergeSemantics(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: const BoxDecoration(
+                color: HuellitasTheme.arena,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, size: 22, color: HuellitasTheme.ink),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    titulo,
+                    style: textos.bodyMedium!.copyWith(
+                      fontSize: 13,
+                      color: HuellitasTheme.inkSoft,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(valor, style: textos.labelLarge!.copyWith(fontSize: 16)),
+                  if (detalle != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      detalle!,
+                      style: textos.bodyMedium!.copyWith(color: HuellitasTheme.inkSoft),
+                    ),
+                  ],
+                ],
+              ),
             ),
           ],
         ),

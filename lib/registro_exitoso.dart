@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'huellitas_theme.dart';
 import 'mascota_model.dart';
-import 'registro.dart';
+import 'inicio.dart';
 import 'registro_repository.dart';
 import 'widgets/clay.dart';
 
@@ -12,17 +12,7 @@ class RegistroExitosoPage extends StatelessWidget {
   final UsuarioModel usuario;
   final RegistroRepository repository;
 
-  /// Lleva al inicio de la app. Mientras no exista esa pantalla se deja en
-  /// `null` y no se muestra el botón principal, para no prometer un destino
-  /// que no hay.
-  final VoidCallback? onContinuar;
-
-  const RegistroExitosoPage({
-    super.key,
-    required this.usuario,
-    this.repository = const RegistroSimuladoRepository(),
-    this.onContinuar,
-  });
+  const RegistroExitosoPage({super.key, required this.usuario, required this.repository});
 
   @override
   Widget build(BuildContext context) {
@@ -68,111 +58,37 @@ class RegistroExitosoPage extends StatelessWidget {
                     padding: const EdgeInsets.fromLTRB(22, 8, 22, 8),
                     child: Column(
                       children: [
-                        _Dato(
+                        DatoCuenta(
                           icon: Icons.mail_outline_rounded,
                           titulo: 'Inicias sesión con',
                           valor: usuario.correo,
                         ),
                         if (mascota != null) ...[
                           const Divider(height: 1, color: HuellitasTheme.borde),
-                          _Dato(
+                          DatoCuenta(
                             icon: Icons.pets_rounded,
                             titulo: 'Carnet creado para',
                             valor: mascota.nombre,
-                            detalle: [
-                              mascota.tipoLegible,
-                              mascota.edadLegible,
-                              if (mascota.raza.isNotEmpty) mascota.raza,
-                              if (mascota.pesoLegible != null) mascota.pesoLegible!,
-                            ].join(' · '),
+                            detalle: mascota.resumen,
                           ),
                         ],
                       ],
                     ),
                   ),
                   const SizedBox(height: 28),
-                  if (onContinuar != null) ...[
-                    ClayButton(label: 'Ir al inicio', onPressed: onContinuar),
-                    const SizedBox(height: 8),
-                  ],
-                  // Acción secundaria y con nombre explícito: abre un
-                  // formulario nuevo, no "continúa" a ninguna parte.
-                  TextButton(
-                    onPressed: () => Navigator.of(context).pushReplacement(
+                  ClayButton(
+                    label: 'Ir al inicio',
+                    onPressed: () => Navigator.of(context).pushAndRemoveUntil(
                       MaterialPageRoute<void>(
-                        builder: (_) => FormularioRegistroPage(repository: repository),
+                        builder: (_) => InicioPage(usuario: usuario, repository: repository),
                       ),
+                      (_) => false,
                     ),
-                    child: const Text('Registrar otra cuenta'),
                   ),
                 ],
               ),
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _Dato extends StatelessWidget {
-  final IconData icon;
-  final String titulo;
-  final String valor;
-  final String? detalle;
-
-  const _Dato({
-    required this.icon,
-    required this.titulo,
-    required this.valor,
-    this.detalle,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final textos = Theme.of(context).textTheme;
-    return MergeSemantics(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        child: Row(
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: const BoxDecoration(
-                color: HuellitasTheme.arena,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(icon, size: 22, color: HuellitasTheme.ink),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    titulo,
-                    style: textos.bodyMedium!.copyWith(
-                      fontSize: 13,
-                      color: HuellitasTheme.inkSoft,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    valor,
-                    style: textos.labelLarge!.copyWith(fontSize: 16),
-                  ),
-                  if (detalle != null) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      detalle!,
-                      style: textos.bodyMedium!.copyWith(color: HuellitasTheme.inkSoft),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ],
         ),
       ),
     );

@@ -18,6 +18,23 @@ class _RepoFalso implements RegistroRepository {
     }
     recibidos.add(usuario);
   }
+
+  @override
+  Future<UsuarioModel> iniciarSesion(String correo, String contrasena) async {
+    return recibidos.firstWhere(
+      (u) => u.correo == correo.trim().toLowerCase() && u.contrasena == contrasena,
+      orElse: () => throw const RegistroException('El correo o la contraseña no coinciden.'),
+    );
+  }
+}
+
+/// Abre la app y entra al registro desde la bienvenida.
+Future<void> _abrirRegistro(WidgetTester tester, RegistroRepository repo) async {
+  await tester.pumpWidget(HuellitasApp(repository: repo));
+  await tester.ensureVisible(find.text('Crear cuenta'));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('Crear cuenta'));
+  await tester.pumpAndSettle();
 }
 
 Finder _campo(String etiqueta) => find.widgetWithText(TextField, etiqueta);
@@ -51,16 +68,15 @@ Future<void> _llenarCuenta(WidgetTester tester) async {
 
 void main() {
   testWidgets('abre en el paso 1 con el progreso visible', (tester) async {
-    await tester.pumpWidget(HuellitasApp(repository: _RepoFalso()));
+    await _abrirRegistro(tester, _RepoFalso());
 
     expect(find.text('Crear cuenta'), findsOneWidget);
     expect(find.text('PASO 1 DE 3'), findsOneWidget);
     expect(find.text('Sobre ti'), findsOneWidget);
-    expect(find.text('Atrás'), findsNothing);
   });
 
   testWidgets('no avanza con campos vacíos y los errores se corrigen al escribir', (tester) async {
-    await tester.pumpWidget(HuellitasApp(repository: _RepoFalso()));
+    await _abrirRegistro(tester, _RepoFalso());
 
     await _tocar(tester, find.text('Continuar'));
     expect(find.text('PASO 1 DE 3'), findsOneWidget);
@@ -74,7 +90,7 @@ void main() {
   });
 
   testWidgets('el documento quita puntos y espacios, y avisa si hay letras en una cédula', (tester) async {
-    await tester.pumpWidget(HuellitasApp(repository: _RepoFalso()));
+    await _abrirRegistro(tester, _RepoFalso());
     await _escribir(tester, 'Nombre', 'Sofía');
     await _escribir(tester, 'Apellido', 'Peña');
 
@@ -99,7 +115,7 @@ void main() {
   });
 
   testWidgets('la contraseña muestra requisitos en vivo y valida la confirmación', (tester) async {
-    await tester.pumpWidget(HuellitasApp(repository: _RepoFalso()));
+    await _abrirRegistro(tester, _RepoFalso());
     await _llenarSobreTi(tester);
     expect(find.text('PASO 2 DE 3'), findsOneWidget);
 
@@ -117,7 +133,7 @@ void main() {
   });
 
   testWidgets('se puede mostrar y ocultar la contraseña', (tester) async {
-    await tester.pumpWidget(HuellitasApp(repository: _RepoFalso()));
+    await _abrirRegistro(tester, _RepoFalso());
     await _llenarSobreTi(tester);
 
     bool oculta() => tester.widget<EditableText>(
@@ -132,7 +148,7 @@ void main() {
   });
 
   testWidgets('volver atrás conserva lo escrito', (tester) async {
-    await tester.pumpWidget(HuellitasApp(repository: _RepoFalso()));
+    await _abrirRegistro(tester, _RepoFalso());
     await _llenarSobreTi(tester);
     await _escribir(tester, 'Correo electrónico', 'sofia@correo.com');
 
@@ -147,7 +163,7 @@ void main() {
 
   testWidgets('registro completo con mascota llega a la confirmación', (tester) async {
     final repo = _RepoFalso();
-    await tester.pumpWidget(HuellitasApp(repository: repo));
+    await _abrirRegistro(tester, repo);
     await _llenarSobreTi(tester);
     await _llenarCuenta(tester);
     expect(find.text('PASO 3 DE 3'), findsOneWidget);
@@ -187,7 +203,7 @@ void main() {
 
   testWidgets('"Otro" pide la especie', (tester) async {
     final repo = _RepoFalso();
-    await tester.pumpWidget(HuellitasApp(repository: repo));
+    await _abrirRegistro(tester, repo);
     await _llenarSobreTi(tester);
     await _llenarCuenta(tester);
 
@@ -215,7 +231,7 @@ void main() {
 
   testWidgets('sin mascota se registra sin pedir sus datos', (tester) async {
     final repo = _RepoFalso();
-    await tester.pumpWidget(HuellitasApp(repository: repo));
+    await _abrirRegistro(tester, repo);
     await _llenarSobreTi(tester);
     await _llenarCuenta(tester);
 
@@ -231,7 +247,7 @@ void main() {
 
   testWidgets('si el registro falla, avisa junto al botón y permite reintentar', (tester) async {
     final repo = _RepoFalso(fallosPendientes: 1);
-    await tester.pumpWidget(HuellitasApp(repository: repo));
+    await _abrirRegistro(tester, repo);
     await _llenarSobreTi(tester);
     await _llenarCuenta(tester);
     await _tocar(tester, find.text('Todavía no'));
@@ -255,7 +271,7 @@ void main() {
 
   testWidgets('tras un fallo el botón pasa a "Reintentar" y envía de nuevo', (tester) async {
     final repo = _RepoFalso(fallosPendientes: 1);
-    await tester.pumpWidget(HuellitasApp(repository: repo));
+    await _abrirRegistro(tester, repo);
     await _llenarSobreTi(tester);
     await _llenarCuenta(tester);
     await _tocar(tester, find.text('Todavía no'));
@@ -267,7 +283,7 @@ void main() {
   });
 
   testWidgets('el cursor va al primer campo con error en orden de pantalla', (tester) async {
-    await tester.pumpWidget(HuellitasApp(repository: _RepoFalso()));
+    await _abrirRegistro(tester, _RepoFalso());
     await _llenarSobreTi(tester);
     await _llenarCuenta(tester);
 
@@ -283,7 +299,7 @@ void main() {
   });
 
   testWidgets('el atrás del sistema retrocede un paso sin perder datos', (tester) async {
-    await tester.pumpWidget(HuellitasApp(repository: _RepoFalso()));
+    await _abrirRegistro(tester, _RepoFalso());
     await _llenarSobreTi(tester);
     expect(find.text('PASO 2 DE 3'), findsOneWidget);
 
@@ -301,7 +317,7 @@ void main() {
     addTearDown(tester.platformDispatcher.clearAllTestValues);
 
     final repo = _RepoFalso(fallosPendientes: 1);
-    await tester.pumpWidget(HuellitasApp(repository: repo));
+    await _abrirRegistro(tester, repo);
     await _tocar(tester, find.text('Continuar')); // errores del paso 1
     await _llenarSobreTi(tester);
     await _tocar(tester, find.text('Continuar')); // errores del paso 2
@@ -320,9 +336,10 @@ void main() {
   });
 
   testWidgets('mientras se envía, el botón se bloquea para evitar registros dobles', (tester) async {
-    await tester.pumpWidget(const HuellitasApp(
-      repository: RegistroSimuladoRepository(demora: Duration(seconds: 1)),
-    ));
+    await _abrirRegistro(
+      tester,
+      RegistroSimuladoRepository(demora: const Duration(seconds: 1)),
+    );
     await _llenarSobreTi(tester);
     await _llenarCuenta(tester);
     await _tocar(tester, find.text('Todavía no'));
@@ -335,5 +352,74 @@ void main() {
 
     await tester.pumpAndSettle(const Duration(seconds: 1));
     expect(find.text('¡Listo, Sofía!'), findsOneWidget);
+  });
+
+  group('bienvenida e inicio de sesión', () {
+    testWidgets('la app abre en la bienvenida con las dos opciones', (tester) async {
+      await tester.pumpWidget(HuellitasApp(repository: _RepoFalso()));
+
+      expect(find.text('Huellitas'), findsOneWidget);
+      expect(find.text('Crear cuenta'), findsOneWidget);
+      expect(find.text('Iniciar sesión'), findsOneWidget);
+      expect(find.text('PASO 1 DE 3'), findsNothing);
+    });
+
+    testWidgets('desde el registro, "Atrás" en el paso 1 vuelve a la bienvenida', (tester) async {
+      await _abrirRegistro(tester, _RepoFalso());
+      expect(find.text('PASO 1 DE 3'), findsOneWidget);
+
+      await _tocar(tester, find.text('Atrás'));
+      expect(find.text('Huellitas'), findsOneWidget);
+    });
+
+    testWidgets('registrarse, cerrar sesión e iniciar sesión con la misma cuenta', (tester) async {
+      final repo = _RepoFalso();
+      await _abrirRegistro(tester, repo);
+      await _llenarSobreTi(tester);
+      await _llenarCuenta(tester);
+      await _tocar(tester, find.text('Todavía no'));
+      await _tocar(tester, find.text('Crear mi cuenta'));
+
+      await _tocar(tester, find.text('Ir al inicio'));
+      expect(find.text('Hola, Sofía'), findsOneWidget);
+      expect(find.text('Aún no has registrado una'), findsOneWidget);
+
+      await _tocar(tester, find.text('Cerrar sesión'));
+      expect(find.text('Huellitas'), findsOneWidget);
+
+      await _tocar(tester, find.text('Iniciar sesión'));
+      // Vacío: pide los datos sin llamar al servidor.
+      await _tocar(tester, find.widgetWithText(ElevatedButton, 'Iniciar sesión'));
+      expect(find.text('Escribe tu correo'), findsOneWidget);
+      expect(find.text('Escribe tu contraseña'), findsOneWidget);
+
+      // Contraseña errada: aviso claro y se puede corregir.
+      await _escribir(tester, 'Correo electrónico', 'Sofia@Correo.com');
+      await _escribir(tester, 'Contraseña', 'otraclave9');
+      await _tocar(tester, find.widgetWithText(ElevatedButton, 'Iniciar sesión'));
+      expect(find.text('El correo o la contraseña no coinciden.'), findsOneWidget);
+
+      await _escribir(tester, 'Contraseña', 'huellitas1');
+      await _tocar(tester, find.widgetWithText(ElevatedButton, 'Iniciar sesión'));
+      expect(find.text('Hola, Sofía'), findsOneWidget);
+    });
+
+    testWidgets('desde iniciar sesión se puede pasar a crear cuenta', (tester) async {
+      await tester.pumpWidget(HuellitasApp(repository: _RepoFalso()));
+      await _tocar(tester, find.text('Iniciar sesión'));
+      await _tocar(tester, find.text('¿No tienes cuenta? Crear cuenta'));
+      expect(find.text('PASO 1 DE 3'), findsOneWidget);
+    });
+
+    test('el repositorio simulado guarda la cuenta y rechaza correos repetidos', () async {
+      final repo = RegistroSimuladoRepository(demora: Duration.zero);
+      final sofia = UsuarioModel(nombre: 'Sofía', correo: 'sofia@correo.com', contrasena: 'huellitas1');
+      await repo.registrar(sofia);
+
+      expect(await repo.iniciarSesion(' Sofia@Correo.com ', 'huellitas1'), same(sofia));
+      expect(() => repo.iniciarSesion('sofia@correo.com', 'mala'), throwsA(isA<RegistroException>()));
+      expect(() => repo.iniciarSesion('nadie@correo.com', 'huellitas1'), throwsA(isA<RegistroException>()));
+      expect(() => repo.registrar(sofia), throwsA(isA<RegistroException>()));
+    });
   });
 }

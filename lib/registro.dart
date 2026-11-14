@@ -15,10 +15,7 @@ import 'widgets/clay.dart';
 class FormularioRegistroPage extends StatefulWidget {
   final RegistroRepository repository;
 
-  const FormularioRegistroPage({
-    super.key,
-    this.repository = const RegistroSimuladoRepository(),
-  });
+  const FormularioRegistroPage({super.key, required this.repository});
 
   @override
   State<FormularioRegistroPage> createState() => _FormularioRegistroPageState();
@@ -117,7 +114,13 @@ class _FormularioRegistroPageState extends State<FormularioRegistroPage> {
   }
 
   void _atras() {
-    if (_paso > 0 && !_enviando) _irAlPaso(_paso - 1);
+    if (_enviando) return;
+    if (_paso > 0) {
+      _irAlPaso(_paso - 1);
+    } else {
+      // En el primer paso, "Atrás" vuelve a la bienvenida.
+      Navigator.of(context).maybePop();
+    }
   }
 
   void _continuar() {
@@ -213,13 +216,16 @@ class _FormularioRegistroPageState extends State<FormularioRegistroPage> {
     try {
       await widget.repository.registrar(usuario);
       if (!mounted) return;
-      Navigator.of(context).pushReplacement(
+      // La confirmación reemplaza todo lo anterior: "atrás" no debe volver a
+      // un formulario ya enviado.
+      Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute<void>(
           builder: (_) => RegistroExitosoPage(
             usuario: usuario,
             repository: widget.repository,
           ),
         ),
+        (_) => false,
       );
     } catch (e) {
       if (!mounted) return;
@@ -356,7 +362,7 @@ class _FormularioRegistroPageState extends State<FormularioRegistroPage> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               if (_errorEnvio != null) ...[
-                _AvisoError(_errorEnvio!),
+                AvisoError(_errorEnvio!),
                 const SizedBox(height: 12),
               ],
               // Con teclado, tras el último campo sigue la acción principal
@@ -365,7 +371,7 @@ class _FormularioRegistroPageState extends State<FormularioRegistroPage> {
                 policy: OrderedTraversalPolicy(),
                 child: Row(
                   children: [
-                    if (_paso > 0) ...[
+                    if (_paso > 0 || Navigator.of(context).canPop()) ...[
                       // Con letra grande o pantalla angosta queda solo la
                       // flecha, para no quitarle espacio al botón principal.
                       FocusTraversalOrder(
@@ -753,46 +759,6 @@ class _EtiquetaGrupo extends StatelessWidget {
       child: ExcludeSemantics(
         // El selector que sigue ya anuncia esta pregunta como su etiqueta.
         child: Text(text, style: Theme.of(context).textTheme.labelLarge),
-      ),
-    );
-  }
-}
-
-/// Aviso de un error del servidor o de conexión, junto al botón que reintenta.
-class _AvisoError extends StatelessWidget {
-  final String mensaje;
-  const _AvisoError(this.mensaje);
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      container: true,
-      liveRegion: true,
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(14, 12, 16, 12),
-        decoration: BoxDecoration(
-          color: HuellitasTheme.coral.withAlpha(56),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: HuellitasTheme.coralInk, width: 1.2),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Icon(Icons.error_outline_rounded, size: 20, color: HuellitasTheme.coralInk),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                mensaje,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: HuellitasTheme.ink,
-                  height: 1.35,
-                ),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

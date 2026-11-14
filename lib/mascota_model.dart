@@ -54,6 +54,14 @@ class MascotaModel {
     return '${texto.replaceAll('.', ',')} kg';
   }
 
+  /// Resumen en una línea: "Gato · 5 meses · Criollo · 2,4 kg".
+  String get resumen => [
+        tipoLegible,
+        edadLegible,
+        if (raza.isNotEmpty) raza,
+        if (pesoLegible != null) pesoLegible!,
+      ].join(' · ');
+
   /// Especie lista para mostrar: "Perro", "Gato" o la especie escrita.
   String get tipoLegible {
     final otra = especie?.trim() ?? '';
