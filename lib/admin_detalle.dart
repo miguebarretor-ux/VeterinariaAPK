@@ -100,7 +100,7 @@ class _AdminDetallePageState extends State<AdminDetallePage> {
             ..._usuario.mascotas.map(
               (m) => _MascotaSection(
                 mascota: m,
-                citas: _citas.where((c) => c.mascota == m.nombre).toList(),
+                citas: _citas.where((c) => c.mascotaEn(_usuario.mascotas)?.id == m.id).toList(),
                 onAgregarVacuna: () => _agregarVacuna(m),
                 onEliminarVacuna: (i) => _eliminarVacuna(m, i),
               ),

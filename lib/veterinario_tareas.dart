@@ -1,9 +1,10 @@
 import 'dart:async';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'admin_shell.dart' show AdminVacunaSheet;
 import 'mascota_model.dart';
 import 'huellitas_theme.dart';
 import 'widgets.dart';
+import 'repositories/cita_repository.dart';
 import 'repositories/usuario_repository.dart';
 
 class VeterinarioTareasPage extends StatefulWidget {
@@ -15,36 +16,117 @@ class VeterinarioTareasPage extends StatefulWidget {
 }
 
 class _VeterinarioTareasPageState extends State<VeterinarioTareasPage> {
+  List<CitaModel> _citas = [];
   List<_CitaConDueno> _tareas = [];
   bool _cargando = true;
-  StreamSubscription<QuerySnapshot>? _sub;
+  String? _error;
+  StreamSubscription<List<CitaModel>>? _sub;
 
   @override
   void initState() {
     super.initState();
-    _sub = FirebaseFirestore.instance
-        .collectionGroup('citas')
-        .where('veterinarioId', isEqualTo: widget.veterinario.uid)
-        .snapshots()
-        .listen(
-      (snap) async {
-        final items = <_CitaConDueno>[];
-        for (final doc in snap.docs) {
-          final cita = CitaModel.fromJson(
-              {'id': doc.id, ...doc.data()});
-          // El UID del dueño es el padre del documento: usuarios/{uid}/citas/{id}
-          final duenoUid = doc.reference.parent.parent?.id;
-          if (duenoUid == null) continue;
-          final dueno = await UsuarioRepository.obtener(duenoUid);
-          if (dueno != null) items.add(_CitaConDueno(cita: cita, dueno: dueno));
+    _sub = CitaRepository.streamPorVeterinario(widget.veterinario.uid!).listen(
+      (citas) {
+        _citas = citas;
+        _cargarDuenos();
+      },
+      onError: (Object e) {
+        // Antes un fallo aquí se veía igual que "no tienes citas".
+        if (mounted) {
+          setState(() {
+            _cargando = false;
+            _error = mensajeDeError(e);
+          });
         }
-        // Ordenar: próximas primero, luego historial
-        items.sort((a, b) => a.cita.fecha.compareTo(b.cita.fecha));
-        if (mounted) setState(() { _tareas = items; _cargando = false; });
       },
-      onError: (_) {
-        if (mounted) setState(() => _cargando = false);
-      },
+    );
+  }
+
+  /// Carga (en paralelo y una vez por persona) el perfil del dueño de cada
+  /// cita, para mostrar sus datos y los de la mascota.
+  Future<void> _cargarDuenos() async {
+    final uids = _citas.map((c) => c.duenoUid).whereType<String>().toSet();
+    final duenos = <String, UsuarioModel>{};
+    await Future.wait(uids.map((uid) async {
+      try {
+        final u = await UsuarioRepository.obtener(uid);
+        if (u != null) duenos[uid] = u;
+      } catch (_) {
+        // La cita se muestra igual, sin los datos del dueño.
+      }
+    }));
+    if (!mounted) return;
+    final items = [
+      for (final c in _citas) _CitaConDueno(cita: c, dueno: duenos[c.duenoUid]),
+    ]..sort((a, b) => a.cita.claveOrden.compareTo(b.cita.claveOrden));
+    setState(() {
+      _tareas = items;
+      _cargando = false;
+      _error = null;
+    });
+  }
+
+  Future<void> _ejecutar(Future<void> Function() accion, String exito) async {
+    try {
+      await accion();
+      if (mounted) mostrarAviso(context, exito);
+    } catch (e) {
+      if (mounted) mostrarAviso(context, mensajeDeError(e), error: true);
+    }
+  }
+
+  /// Marca la cita como atendida, con notas opcionales para el dueño.
+  Future<void> _atender(CitaModel c) async {
+    final notasCtrl = TextEditingController();
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+        title: const Text('Marcar como atendida'),
+        content: TextField(
+          controller: notasCtrl,
+          maxLines: 4,
+          maxLength: 500,
+          decoration: HuellitasTheme.field('Notas para el dueño',
+              hint: 'Diagnóstico, tratamiento, próxima visita… (opcional)'),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Volver')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Marcar atendida',
+                style: TextStyle(fontWeight: FontWeight.w800)),
+          ),
+        ],
+      ),
+    );
+    if (confirmar != true) return;
+    await _ejecutar(
+      () => CitaRepository.marcarAtendida(c, notas: notasCtrl.text),
+      'Cita marcada como atendida.',
+    );
+  }
+
+  void _registrarVacuna(UsuarioModel dueno, MascotaModel mascota) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+        child: AdminVacunaSheet(
+          onGuardar: (v) async {
+            await _ejecutar(
+              () => UsuarioRepository.agregarVacuna(dueno.uid!, mascota.id, v),
+              'Vacuna registrada en el carnet de ${mascota.nombre}.',
+            );
+            // El carnet vive en el perfil del dueño: se vuelve a leer.
+            _cargarDuenos();
+          },
+        ),
+      ),
     );
   }
 
@@ -60,7 +142,7 @@ class _VeterinarioTareasPageState extends State<VeterinarioTareasPage> {
         _tareas.where((t) => t.cita.esProxima).toList();
     final historial =
         _tareas.where((t) => !t.cita.esProxima).toList()
-          ..sort((a, b) => b.cita.fecha.compareTo(a.cita.fecha));
+          ..sort((a, b) => b.cita.claveOrden.compareTo(a.cita.claveOrden));
 
     return Scaffold(
       backgroundColor: HuellitasTheme.arena,
@@ -101,7 +183,14 @@ class _VeterinarioTareasPageState extends State<VeterinarioTareasPage> {
       body: _cargando
           ? const Center(
               child: CircularProgressIndicator(color: HuellitasTheme.menta))
-          : _tareas.isEmpty
+          : _error != null
+              ? EstadoVacio(
+                  icono: Icons.cloud_off_rounded,
+                  color: HuellitasTheme.coral,
+                  titulo: 'No pudimos cargar tus citas',
+                  detalle: _error!,
+                )
+              : _tareas.isEmpty
               ? _EmptyState()
               : ListView(
                   padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
@@ -141,15 +230,31 @@ class _VeterinarioTareasPageState extends State<VeterinarioTareasPage> {
                       const SizedBox(height: 24),
                       const SectionLabel('Próximas'),
                       const SizedBox(height: 12),
-                      ...proximas.map((t) => _TareaCard(item: t)),
+                      ...proximas.map((t) => _TareaCard(
+                            item: t,
+                            onAtender: () => _atender(t.cita),
+                            onVacuna: _registrarVacuna,
+                          )),
                     ],
                     // Historial
                     if (historial.isNotEmpty) ...[
                       const SizedBox(height: 24),
                       const SectionLabel('Historial'),
                       const SizedBox(height: 12),
-                      ...historial.map(
-                          (t) => _TareaCard(item: t, pasada: true)),
+                      ...historial.map((t) => _TareaCard(
+                            item: t,
+                            pasada: true,
+                            // Una cita pendiente que ya pasó aún se puede cerrar.
+                            onAtender: t.cita.estado == EstadoCita.pendiente
+                                ? () => _atender(t.cita)
+                                : null,
+                            onReabrir: t.cita.estado == EstadoCita.atendida
+                                ? () => _ejecutar(
+                                    () => CitaRepository.reabrir(t.cita),
+                                    'Cita reabierta.')
+                                : null,
+                            onVacuna: _registrarVacuna,
+                          )),
                     ],
                   ],
                 ),
@@ -162,7 +267,16 @@ class _VeterinarioTareasPageState extends State<VeterinarioTareasPage> {
 class _TareaCard extends StatefulWidget {
   final _CitaConDueno item;
   final bool pasada;
-  const _TareaCard({required this.item, this.pasada = false});
+  final VoidCallback? onAtender;
+  final VoidCallback? onReabrir;
+  final void Function(UsuarioModel dueno, MascotaModel mascota)? onVacuna;
+  const _TareaCard({
+    required this.item,
+    this.pasada = false,
+    this.onAtender,
+    this.onReabrir,
+    this.onVacuna,
+  });
 
   @override
   State<_TareaCard> createState() => _TareaCardState();
@@ -175,9 +289,7 @@ class _TareaCardState extends State<_TareaCard> {
   Widget build(BuildContext context) {
     final cita = widget.item.cita;
     final dueno = widget.item.dueno;
-    final mascota = dueno.mascotas
-        .cast<MascotaModel?>()
-        .firstWhere((m) => m?.nombre == cita.mascota, orElse: () => null);
+    final mascota = dueno == null ? null : cita.mascotaEn(dueno.mascotas);
 
     return GestureDetector(
       onTap: () => setState(() => _expandido = !_expandido),
@@ -245,13 +357,20 @@ class _TareaCardState extends State<_TareaCard> {
             // Chips cliente + mascota (siempre visibles)
             const SizedBox(height: 10),
             Wrap(spacing: 8, runSpacing: 6, children: [
-              _InfoChip(
-                icono: Icons.person_outline,
-                label: '${dueno.nombre} ${dueno.apellido}',
-              ),
+              if (dueno != null)
+                _InfoChip(
+                  icono: Icons.person_outline,
+                  label: dueno.nombreCompleto,
+                ),
               _InfoChip(
                 icono: Icons.pets,
                 label: cita.mascota,
+              ),
+              EstadoChip(
+                widget.pasada && cita.estado == EstadoCita.pendiente
+                    ? 'Sin atender'
+                    : cita.estado.etiqueta,
+                color: colorEstadoCita(cita.estado),
               ),
             ]),
             // Detalle expandible
@@ -259,16 +378,12 @@ class _TareaCardState extends State<_TareaCard> {
               const SizedBox(height: 16),
               const Divider(color: HuellitasTheme.arena, thickness: 1.5),
               const SizedBox(height: 12),
-              const SectionLabel('Cliente'),
-              const SizedBox(height: 8),
-              _DetalleRow(
-                  icono: Icons.email_outlined, texto: dueno.correo),
-              if (dueno.numeroDocumento.isNotEmpty)
+              if (dueno != null) ...[
+                const SectionLabel('Cliente'),
+                const SizedBox(height: 8),
                 _DetalleRow(
-                  icono: Icons.badge_outlined,
-                  texto:
-                      '${dueno.tipoDocumento}: ${dueno.numeroDocumento}',
-                ),
+                    icono: Icons.email_outlined, texto: dueno.correo),
+              ],
               if (mascota != null) ...[
                 const SizedBox(height: 14),
                 const SectionLabel('Mascota'),
@@ -295,6 +410,45 @@ class _TareaCardState extends State<_TareaCard> {
                   ),
                 ],
               ],
+              if (cita.notas.isNotEmpty) ...[
+                const SizedBox(height: 14),
+                const SectionLabel('Notas de la atención'),
+                const SizedBox(height: 8),
+                Text(cita.notas,
+                    style: const TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.w500)),
+              ],
+              // Acciones del veterinario
+              const SizedBox(height: 16),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  if (widget.onAtender != null)
+                    FilledButton.icon(
+                      onPressed: widget.onAtender,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: HuellitasTheme.lima,
+                        foregroundColor: HuellitasTheme.ink,
+                      ),
+                      icon: const Icon(Icons.check_rounded, size: 18),
+                      label: const Text('Marcar atendida'),
+                    ),
+                  if (dueno != null && mascota != null && widget.onVacuna != null)
+                    OutlinedButton.icon(
+                      onPressed: () => widget.onVacuna!(dueno, mascota),
+                      style: OutlinedButton.styleFrom(
+                          foregroundColor: HuellitasTheme.ink),
+                      icon: const Icon(Icons.vaccines_outlined, size: 18),
+                      label: const Text('Registrar vacuna'),
+                    ),
+                  if (widget.onReabrir != null)
+                    TextButton(
+                      onPressed: widget.onReabrir,
+                      child: const Text('Reabrir'),
+                    ),
+                ],
+              ),
             ],
           ],
         ),
@@ -410,7 +564,7 @@ class _EmptyState extends StatelessWidget {
                 textAlign: TextAlign.center),
             const SizedBox(height: 8),
             Text(
-              'Cuando el admin te asigne una cita\naparecerá aquí.',
+              'Cuando un cliente te elija o el admin\nte asigne una cita, aparecerá aquí.',
               style: Theme.of(context)
                   .textTheme
                   .bodyMedium
@@ -428,6 +582,6 @@ class _EmptyState extends StatelessWidget {
 
 class _CitaConDueno {
   final CitaModel cita;
-  final UsuarioModel dueno;
-  const _CitaConDueno({required this.cita, required this.dueno});
+  final UsuarioModel? dueno; // null si no se pudo leer su perfil
+  const _CitaConDueno({required this.cita, this.dueno});
 }

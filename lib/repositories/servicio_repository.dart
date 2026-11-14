@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'db.dart';
 
 // ── Modelo ─────────────────────────────────────────────────────────────────────
 
@@ -60,10 +61,10 @@ class VacunaCatalogoModel {
 // ── Repository ─────────────────────────────────────────────────────────────────
 
 class ServicioRepository {
-  static final _servicios =
-      FirebaseFirestore.instance.collection('servicios');
-  static final _vacunas =
-      FirebaseFirestore.instance.collection('vacunas_catalogo');
+  static CollectionReference<Map<String, dynamic>> get _servicios =>
+      Db.i.collection('servicios');
+  static CollectionReference<Map<String, dynamic>> get _vacunas =>
+      Db.i.collection('vacunas_catalogo');
 
   // ── SERVICIOS ──────────────────────────────────────────────────────────────
 

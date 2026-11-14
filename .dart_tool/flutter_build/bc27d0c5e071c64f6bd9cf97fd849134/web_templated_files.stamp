@@ -1,0 +1,1 @@
+{"inputs":["/home/user/VeterinariaAPK/web/*/index.html","/home/user/VeterinariaAPK/web/flutter_bootstrap.js","/opt/flutter/bin/cache/engine.stamp"],"outputs":["/home/user/VeterinariaAPK/build/web/*/index.html","/home/user/VeterinariaAPK/build/web/flutter_bootstrap.js"],"buildKey":"[{\"compileTarget\":\"dart2js\",\"renderer\":\"canvaskit\",\"mainJsPath\":\"main.dart.js\"},{}]"}

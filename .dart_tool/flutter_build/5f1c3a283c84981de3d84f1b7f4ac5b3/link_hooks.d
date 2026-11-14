@@ -1,0 +1,1 @@
+ /home/user/VeterinariaAPK/.dart_tool/flutter_build/5f1c3a283c84981de3d84f1b7f4ac5b3/link_hooks_result.json: 

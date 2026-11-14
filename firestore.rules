@@ -3,75 +3,134 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // ── Helpers ───────────────────────────────────────────────────────────────
-    function rolDelUsuario() {
-      return get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.rol;
+    function autenticado() { return request.auth != null; }
+    function esDueno(uid)  { return autenticado() && request.auth.uid == uid; }
+    function yo() {
+      return get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data;
     }
-    function esAdmin()        { return rolDelUsuario() == 'admin'; }
-    function esVeterinario()  { return rolDelUsuario() == 'veterinario'; }
+    function esAdmin() { return autenticado() && yo().rol == 'admin'; }
+    // Un veterinario desactivado pierde sus permisos.
+    function esVeterinario() {
+      return autenticado() && yo().rol == 'veterinario' && yo().get('activo', true) == true;
+    }
+    function cambiaSolo(campos) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(campos);
+    }
 
     // ── USUARIOS ──────────────────────────────────────────────────────────────
     match /usuarios/{uid} {
-      // Cada usuario lee y escribe su propio documento
-      allow read, write: if request.auth != null && request.auth.uid == uid;
+      allow read: if esDueno(uid) || esAdmin();
+      // El veterinario abre el perfil del dueño de una cita (uno a uno, sin
+      // poder listar a todos los usuarios).
+      allow get: if esVeterinario();
+      // Cualquiera con sesión ve a los veterinarios, para elegir al agendar.
+      allow read: if autenticado() && resource.data.rol == 'veterinario';
 
-      // Admin puede leer y escribir cualquier documento de usuario
-      allow read, write: if request.auth != null && esAdmin();
+      // Al registrarse solo se puede crear una cuenta de usuario normal.
+      allow create: if esDueno(uid)
+                    && request.resource.data.rol == 'usuario'
+                    && request.resource.data.get('activo', true) == true;
+      // Cada quien edita sus datos, pero no su rol ni su estado.
+      allow update: if esDueno(uid)
+                    && request.resource.data.rol == resource.data.rol
+                    && request.resource.data.get('activo', true) == resource.data.get('activo', true);
+      // El veterinario solo puede tocar las mascotas (registrar vacunas).
+      allow update: if esVeterinario() && cambiaSolo(['mascotas']);
+      allow write: if esAdmin();
 
-      // Veterinario puede leer su propio documento (ya cubierto arriba)
-      // y leer datos básicos de usuarios para mostrar info en sus tareas
-      allow read: if request.auth != null && esVeterinario();
-
-      // ── CITAS (subcolección) ───────────────────────────────────────────────
+      // ── CITAS ───────────────────────────────────────────────────────────────
       match /citas/{citaId} {
-        // El dueño puede leer y escribir sus propias citas
-        allow read, write: if request.auth != null && request.auth.uid == uid;
+        allow read: if esDueno(uid) || esAdmin();
+        allow read: if esVeterinario() && resource.data.veterinarioId == request.auth.uid;
 
-        // Admin puede leer y escribir citas de cualquier usuario
-        allow read, write: if request.auth != null && esAdmin();
-
-        // Veterinario puede leer citas que le están asignadas
-        allow read: if request.auth != null && esVeterinario()
-                    && resource.data.veterinarioId == request.auth.uid;
+        // El dueño agenda: siempre pendiente y, si elige veterinario, con su
+        // horario reservado en la agenda dentro de la misma escritura.
+        allow create: if esDueno(uid)
+                      && request.resource.data.estado == 'pendiente'
+                      && request.resource.data.duenoUid == uid
+                      && request.resource.data.get('notas', '') == ''
+                      && (request.resource.data.veterinarioId == null
+                          || existsAfter(/databases/$(database)/documents/agenda/$(request.resource.data.veterinarioId + '_' + request.resource.data.fecha + '_' + request.resource.data.hora)));
+        // El dueño solo puede cancelar una cita pendiente.
+        allow update: if esDueno(uid)
+                      && cambiaSolo(['estado'])
+                      && resource.data.get('estado', 'pendiente') == 'pendiente'
+                      && request.resource.data.estado == 'cancelada';
+        // El veterinario asignado la marca atendida (o la reabre) y deja notas.
+        allow update: if esVeterinario()
+                      && resource.data.veterinarioId == request.auth.uid
+                      && cambiaSolo(['estado', 'notas'])
+                      && request.resource.data.estado in ['pendiente', 'atendida'];
+        allow write: if esAdmin();
       }
 
-      // ── CARRITO (subcolección — Fase 6) ───────────────────────────────────
+      // ── CARRITO ─────────────────────────────────────────────────────────────
       match /carrito/{itemId} {
-        allow read, write: if request.auth != null && request.auth.uid == uid;
-        allow read, write: if request.auth != null && esAdmin();
+        allow read, write: if esDueno(uid);
       }
 
-      // ── PEDIDOS (subcolección — Fase 6) ───────────────────────────────────
+      // ── PEDIDOS ─────────────────────────────────────────────────────────────
       match /pedidos/{pedidoId} {
-        allow read, write: if request.auth != null && request.auth.uid == uid;
-        allow read: if request.auth != null && esAdmin();
+        allow read: if esDueno(uid) || esAdmin();
+        // El dueño crea el pedido pendiente y ya no puede modificarlo.
+        allow create: if esDueno(uid)
+                      && request.resource.data.estado == 'pendiente'
+                      && request.resource.data.uid == uid
+                      && request.resource.data.total is number
+                      && request.resource.data.total >= 0
+                      && request.resource.data.items is list
+                      && request.resource.data.items.size() > 0;
+        // El admin solo cambia el estado.
+        allow update: if esAdmin() && cambiaSolo(['estado'])
+                      && request.resource.data.estado in ['pendiente', 'listo', 'entregado', 'cancelado'];
       }
     }
 
-    // ── CITAS — collectionGroup (para vista del veterinario) ─────────────────
-    // Permite al veterinario hacer queries a través de todos los usuarios.
+    // ── Consultas de grupo (todas las citas / pedidos de todos los usuarios) ──
     match /{path=**}/citas/{citaId} {
-      allow read: if request.auth != null
-                  && (esAdmin() || esVeterinario());
+      allow read: if esAdmin();
+      allow read: if esVeterinario() && resource.data.veterinarioId == request.auth.uid;
+    }
+    match /{path=**}/pedidos/{pedidoId} {
+      allow read: if esAdmin();
     }
 
-    // ── SERVICIOS (Fase 5) ────────────────────────────────────────────────────
+    // ── AGENDA: un documento por veterinario + fecha + hora ocupados ─────────
+    match /agenda/{cupoId} {
+      // Solo contiene quién y cuándo; sirve para mostrar horas ocupadas.
+      allow read: if autenticado();
+      // Crear = reservar. Como no se permite actualizar, un horario ya
+      // reservado no se puede pisar. Debe corresponder a una cita real.
+      allow create: if autenticado()
+                    && cupoId == request.resource.data.veterinarioId + '_' + request.resource.data.fecha + '_' + request.resource.data.hora
+                    && (request.resource.data.duenoUid == request.auth.uid || esAdmin())
+                    && getAfter(/databases/$(database)/documents/usuarios/$(request.resource.data.duenoUid)/citas/$(request.resource.data.citaId)).data.veterinarioId == request.resource.data.veterinarioId;
+      allow delete: if esDueno(resource.data.duenoUid) || esAdmin();
+    }
+
+    // ── SERVICIOS Y CATÁLOGO DE VACUNAS ───────────────────────────────────────
     match /servicios/{servicioId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && esAdmin();
+      allow read: if autenticado();
+      allow write: if esAdmin();
     }
-
-    // ── CATÁLOGO DE VACUNAS (Fase 5) ─────────────────────────────────────────
     match /vacunas_catalogo/{vacunaId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && esAdmin();
+      allow read: if autenticado();
+      allow write: if esAdmin();
     }
 
-    // ── PRODUCTOS / TIENDA (Fase 6) ───────────────────────────────────────────
+    // ── PRODUCTOS / TIENDA ────────────────────────────────────────────────────
     match /productos/{productoId} {
-      // Todos los autenticados pueden leer productos visibles
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && esAdmin();
+      allow read: if autenticado();
+      allow write: if esAdmin();
+      // Al comprar, un cliente solo puede bajar el stock, nunca dejarlo en
+      // negativo ni tocar precio, nombre o visibilidad.
+      // (Que la rebaja coincida con un pedido real solo se puede garantizar
+      // del lado del servidor: ver README_SEGURIDAD.md.)
+      allow update: if autenticado()
+                    && cambiaSolo(['stock'])
+                    && request.resource.data.stock is int
+                    && request.resource.data.stock >= 0
+                    && request.resource.data.stock < resource.data.stock;
     }
-
   }
 }
