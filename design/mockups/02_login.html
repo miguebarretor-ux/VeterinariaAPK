@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Iniciar Sesión - Veterinaria</title>
+</head>
+<body>
+
+  <h2>Iniciar Sesión</h2>
+
+  <form id="Untitled-2">
+    <div>
+      <label for="correo">Correo Electrónico:</label><br>
+      <input type="email" id="correo" required>
+    </div>
+    <br>
+    <div>
+      <label for="password">Contraseña:</label><br>
+      <input type="password" id="password" required>
+    </div>
+    <br>
+    <button type="submit">Ingresar</button>
+  </form>
+
+  <p>¿No tienes cuenta? <a href="Untitled-1.html">Regístrate aquí</a></p>
+
+  <script>
+    document.getElementById('Untitled-2').addEventListener('submit', function(e) {
+      e.preventDefault();
+
+      const correo = document.getElementById('correo').value;
+      const password = document.getElementById('password').value;
+
+      const usuarios = JSON.parse(localStorage.getItem('usuarios') || '[]');
+
+      const usuarioValido = usuarios.find(u => u.correo === correo && u.password === password);
+
+      if (usuarioValido) {
+        localStorage.setItem('usuarioSesion', JSON.stringify(usuarioValido));
+        window.location.href = 'Untitled-3.html';
+      } else {
+        alert('Correo o contraseña incorrectos.');
+      }
+    });
+  </script>
+</body>
+</html>

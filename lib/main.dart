@@ -1,32 +1,27 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
-
+import 'firebase_options.dart';
 import 'huellitas_theme.dart';
-import 'bienvenida.dart';
-import 'registro_repository.dart';
+import 'login.dart';
 
-void main() {
-  runApp(HuellitasApp());
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+  runApp(const HuellitasApp());
 }
 
 class HuellitasApp extends StatelessWidget {
-  final RegistroRepository repository;
-
-  HuellitasApp({super.key, RegistroRepository? repository})
-      : repository = repository ?? RegistroSimuladoRepository();
+  const HuellitasApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Huellitas Veterinaria',
       debugShowCheckedModeBanner: false,
-      // El tema vive en MaterialApp para que también lo hereden los menús,
-      // diálogos y avisos, que se dibujan fuera de la pantalla.
       theme: HuellitasTheme.theme,
-      locale: const Locale('es'),
-      supportedLocales: const [Locale('es')],
-      localizationsDelegates: GlobalMaterialLocalizations.delegates,
-      home: BienvenidaPage(repository: repository),
+      home: const IniciarSesionPage(),
     );
   }
 }

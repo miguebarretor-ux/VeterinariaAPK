@@ -1,802 +1,240 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-
-import 'huellitas_theme.dart';
 import 'mascota_model.dart';
-import 'registro_exitoso.dart';
-import 'registro_repository.dart';
-import 'validadores.dart';
-import 'widgets/clay.dart';
+import 'huellitas_theme.dart';
+import 'home_shell.dart';
+import 'widgets.dart';
+import 'repositories/usuario_repository.dart';
+import 'services/auth_service.dart';
 
-/// Registro en tres pasos cortos: Sobre ti → Tu cuenta → Tu mascota.
-///
-/// Cada paso valida solo sus campos, así los errores siempre quedan a la
-/// vista, y lo escrito se conserva al ir hacia atrás.
 class FormularioRegistroPage extends StatefulWidget {
-  final RegistroRepository repository;
-
-  const FormularioRegistroPage({super.key, required this.repository});
+  const FormularioRegistroPage({super.key});
 
   @override
   State<FormularioRegistroPage> createState() => _FormularioRegistroPageState();
 }
 
 class _FormularioRegistroPageState extends State<FormularioRegistroPage> {
-  static const _titulos = ['Sobre ti', 'Tu cuenta', 'Tu mascota'];
-  static const _ayudas = [
-    'Así sabremos cómo llamarte y a nombre de quién quedan las citas.',
-    'Con estos datos vas a iniciar sesión.',
-    'Dejamos listo el carnet de tu mascota desde el primer día.',
-  ];
+  final _formKey = GlobalKey<FormState>();
+  final _usuario = UsuarioModel();
+  final _mascota = MascotaModel();
 
-  final _formKeys = List.generate(3, (_) => GlobalKey<FormState>());
-  final _scrollCtrl = ScrollController();
-
-  // Paso 1 — Sobre ti
-  final _nombreCtrl = TextEditingController();
-  final _apellidoCtrl = TextEditingController();
-  final _documentoCtrl = TextEditingController();
-  String _tipoDocumento = Opciones.tiposDocumento.first;
-
-  // Paso 2 — Tu cuenta
-  final _correoCtrl = TextEditingController();
-  final _contrasenaCtrl = TextEditingController();
-  final _confirmarCtrl = TextEditingController();
-  bool _verContrasena = false;
-
-  // Paso 3 — Tu mascota
-  bool _tieneMascota = true;
-  final _mascotaNombreCtrl = TextEditingController();
-  final _mascotaEspecieCtrl = TextEditingController();
-  final _focoEspecie = FocusNode();
-  final _mascotaEdadCtrl = TextEditingController();
-  final _mascotaPesoCtrl = TextEditingController();
-  final _mascotaRazaCtrl = TextEditingController();
-  String _mascotaTipo = Opciones.tiposMascota.first;
-  String _unidadEdad = Opciones.anios;
-
-  int _paso = 0;
-  bool _enviando = false;
-
-  /// Error del último intento de registro. Se muestra junto al botón hasta
-  /// que la persona reintenta o cambia de paso.
-  String? _errorEnvio;
-
-  /// Pasos donde ya se intentó continuar con errores: desde ahí cada campo se
-  /// revalida al corregirlo, para que el error desaparezca en el momento.
-  final _pasosConIntento = <int>{};
-
-  bool get _esUltimoPaso => _paso == _titulos.length - 1;
-  bool get _esPasaporte => _tipoDocumento == Opciones.pasaporte;
-
-  @override
-  void initState() {
-    super.initState();
-    // La lista de requisitos de la contraseña se actualiza al escribir.
-    _contrasenaCtrl.addListener(_alCambiarContrasena);
-  }
+  final _contrasena1Ctrl = TextEditingController();
+  bool _tieneMascota = false;
+  bool _cargando = false;
 
   @override
   void dispose() {
-    _contrasenaCtrl.removeListener(_alCambiarContrasena);
-    for (final c in [
-      _nombreCtrl,
-      _apellidoCtrl,
-      _documentoCtrl,
-      _correoCtrl,
-      _contrasenaCtrl,
-      _confirmarCtrl,
-      _mascotaNombreCtrl,
-      _mascotaEspecieCtrl,
-      _mascotaEdadCtrl,
-      _mascotaPesoCtrl,
-      _mascotaRazaCtrl,
-    ]) {
-      c.dispose();
-    }
-    _focoEspecie.dispose();
-    _scrollCtrl.dispose();
+    _contrasena1Ctrl.dispose();
     super.dispose();
   }
 
-  void _alCambiarContrasena() => setState(() {});
-
-  // ─── NAVEGACIÓN ENTRE PASOS ────────────────────────────────────────────────
-
-  void _irAlPaso(int paso) {
-    FocusScope.of(context).unfocus();
-    setState(() {
-      _paso = paso;
-      _errorEnvio = null;
-      _verContrasena = false; // al volver, la contraseña vuelve a ocultarse
-    });
-    if (_scrollCtrl.hasClients) _scrollCtrl.jumpTo(0);
-  }
-
-  void _atras() {
-    if (_enviando) return;
-    if (_paso > 0) {
-      _irAlPaso(_paso - 1);
-    } else {
-      // En el primer paso, "Atrás" vuelve a la bienvenida.
-      Navigator.of(context).maybePop();
-    }
-  }
-
-  void _continuar() {
-    if (_enviando) return;
-    final invalidos = _formKeys[_paso].currentState!.validateGranularly();
-    if (invalidos.isNotEmpty) {
-      setState(() => _pasosConIntento.add(_paso));
-      // validateGranularly devuelve los campos en orden de registro, no de
-      // pantalla: se elige el que está más arriba.
-      final primero = invalidos.reduce((a, b) => _posicionY(a) <= _posicionY(b) ? a : b);
-      _mostrarPrimerError(primero.context);
-      return;
-    }
-    if (_esUltimoPaso) {
-      _registrar();
-    } else {
-      _irAlPaso(_paso + 1);
-    }
-  }
-
-  static double _posicionY(FormFieldState<dynamic> campo) {
-    final caja = campo.context.findRenderObject();
-    return caja is RenderBox && caja.hasSize ? caja.localToGlobal(Offset.zero).dy : 0;
-  }
-
-  /// Lleva a la vista el primer campo con error y deja el cursor en él, para
-  /// corregirlo sin tener que buscarlo.
-  void _mostrarPrimerError(BuildContext campo) {
-    EditableText? texto;
-    void buscar(Element e) {
-      if (texto != null) return;
-      final w = e.widget;
-      if (w is EditableText) {
-        texto = w;
-      } else {
-        e.visitChildren(buscar);
-      }
-    }
-
-    (campo as Element).visitChildren(buscar);
-    texto?.focusNode.requestFocus();
-
-    // Tras el siguiente cuadro el mensaje de error ya ocupa su lugar: ahí se
-    // desplaza para que campo y mensaje queden a la vista, y el cursor va al
-    // final para completar lo escrito en vez de reemplazarlo.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!campo.mounted) return;
-      Scrollable.ensureVisible(
-        campo,
-        alignment: 0.25,
-        duration: const Duration(milliseconds: 250),
-      );
-      final control = texto?.controller;
-      if (control != null) {
-        control.selection = TextSelection.collapsed(offset: control.text.length);
-      }
-    });
-  }
-
-  // ─── ENVÍO ─────────────────────────────────────────────────────────────────
-
-  UsuarioModel _armarUsuario() {
-    return UsuarioModel(
-      tipoDocumento: _tipoDocumento,
-      numeroDocumento: _documentoCtrl.text.trim().toUpperCase(),
-      nombre: _nombreCtrl.text.trim(),
-      apellido: _apellidoCtrl.text.trim(),
-      correo: _correoCtrl.text.trim().toLowerCase(),
-      contrasena: _contrasenaCtrl.text,
-      tieneMascota: _tieneMascota,
-      mascota: !_tieneMascota
-          ? null
-          : MascotaModel(
-              nombre: _mascotaNombreCtrl.text.trim(),
-              tipo: _mascotaTipo,
-              especie:
-                  _mascotaTipo == Opciones.otraMascota ? _mascotaEspecieCtrl.text.trim() : null,
-              edad: int.parse(_mascotaEdadCtrl.text.trim()),
-              unidadEdad: _unidadEdad,
-              peso: Validadores.leerPeso(_mascotaPesoCtrl.text),
-              raza: _mascotaRazaCtrl.text.trim(),
-            ),
-    );
+  void _mostrarError(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg, style: const TextStyle(fontWeight: FontWeight.w700)),
+      backgroundColor: HuellitasTheme.coral,
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    ));
   }
 
   Future<void> _registrar() async {
-    FocusScope.of(context).unfocus();
-    final usuario = _armarUsuario();
-    setState(() {
-      _enviando = true;
-      _errorEnvio = null;
-    });
+    if (!_formKey.currentState!.validate()) return;
+    _formKey.currentState!.save();
+    if (_tieneMascota) _usuario.mascotas = [_mascota];
+
+    setState(() => _cargando = true);
     try {
-      await widget.repository.registrar(usuario);
-      if (!mounted) return;
-      // La confirmación reemplaza todo lo anterior: "atrás" no debe volver a
-      // un formulario ya enviado.
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute<void>(
-          builder: (_) => RegistroExitosoPage(
-            usuario: usuario,
-            repository: widget.repository,
-          ),
-        ),
-        (_) => false,
+      final credential = await AuthService.registrar(
+        _usuario.correo,
+        _usuario.contrasena,
       );
-    } catch (e) {
+      final uid = credential.user!.uid;
+      _usuario.uid = uid;
+
+      await UsuarioRepository.crear(uid, _usuario);
+
       if (!mounted) return;
-      setState(() {
-        _enviando = false;
-        _errorEnvio = e is RegistroException
-            ? e.mensaje
-            : 'No pudimos crear tu cuenta. Revisa tu conexión e inténtalo de nuevo.';
-      });
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => HomeShell(usuario: _usuario)),
+      );
+    } on FirebaseAuthException catch (e) {
+      _mostrarError(AuthService.mensajeError(e.code));
+    } finally {
+      if (mounted) setState(() => _cargando = false);
     }
   }
 
-  // ─── UI ────────────────────────────────────────────────────────────────────
-
   @override
   Widget build(BuildContext context) {
-    final textos = Theme.of(context).textTheme;
+    return Scaffold(
+      backgroundColor: HuellitasTheme.lavanda,
+      appBar: AppBar(
+        backgroundColor: HuellitasTheme.lavanda,
+        foregroundColor: HuellitasTheme.ink,
+        elevation: 0,
+        title: const Text('Crear cuenta'),
+      ),
+      body: Form(
+        key: _formKey,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 480),
+              child: Container(
+                decoration: HuellitasTheme.cardBox(radius: 36),
+                padding: const EdgeInsets.all(28),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
 
-    return PopScope(
-      // El "atrás" del sistema retrocede un paso en vez de salir y perder todo.
-      canPop: _paso == 0 && !_enviando,
-      onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) _atras();
-      },
-      child: Scaffold(
-        body: SafeArea(
-          child: Column(
-            children: [
-              Expanded(
-                child: GestureDetector(
-                  behavior: HitTestBehavior.translucent,
-                  onTap: () => FocusScope.of(context).unfocus(),
-                  child: SingleChildScrollView(
-                    controller: _scrollCtrl,
-                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
-                    child: Center(
-                      child: ConstrainedBox(
-                        // En tablet y escritorio el formulario no se estira.
-                        constraints: const BoxConstraints(maxWidth: _anchoMaximo),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Semantics(
-                              header: true,
-                              child: Text('Crear cuenta', style: textos.titleMedium),
-                            ),
-                            const SizedBox(height: 14),
-                            PasoProgreso(actual: _paso, titulos: _titulos),
-                            const SizedBox(height: 22),
-                            AnimatedSwitcher(
-                              duration: MediaQuery.of(context).disableAnimations
-                                  ? Duration.zero
-                                  : const Duration(milliseconds: 220),
-                              switchInCurve: Curves.easeOut,
-                              // Solo se dibuja el paso actual: evita ver dos
-                              // formularios superpuestos durante la transición.
-                              layoutBuilder: (actual, _) => actual ?? const SizedBox.shrink(),
-                              child: _tarjetaDelPaso(textos),
-                            ),
-                          ],
+                    // ── SECCIÓN: DOCUMENTO ─────────────────────────────────
+                    const SectionLabel('Documento de identidad'),
+                    const SizedBox(height: 12),
+
+                    DropdownButtonFormField<String>(
+                      initialValue: _usuario.tipoDocumento,
+                      decoration: HuellitasTheme.field('Tipo de documento'),
+                      items: [
+                        'Cédula de ciudadanía',
+                        'Cédula de extranjería',
+                        'Tarjeta de identidad',
+                        'Pasaporte',
+                      ]
+                          .map((t) => DropdownMenuItem(value: t, child: Text(t)))
+                          .toList(),
+                      onChanged: (v) => setState(() => _usuario.tipoDocumento = v!),
+                      onSaved: (v) => _usuario.tipoDocumento = v!,
+                    ),
+                    const SizedBox(height: 12),
+
+                    TextFormField(
+                      decoration: HuellitasTheme.field('Número de documento'),
+                      keyboardType: TextInputType.number,
+                      validator: (v) => (v == null || v.trim().isEmpty)
+                          ? 'Ingresa tu número de documento'
+                          : null,
+                      onSaved: (v) => _usuario.numeroDocumento = v!,
+                    ),
+                    const SizedBox(height: 24),
+
+                    // ── SECCIÓN: DATOS PERSONALES ──────────────────────────
+                    const SectionLabel('Datos personales'),
+                    const SizedBox(height: 12),
+
+                    TextFormField(
+                      decoration: HuellitasTheme.field('Nombre'),
+                      textCapitalization: TextCapitalization.words,
+                      validator: (v) =>
+                          (v == null || v.trim().isEmpty) ? 'Ingresa tu nombre' : null,
+                      onSaved: (v) => _usuario.nombre = v!.trim(),
+                    ),
+                    const SizedBox(height: 12),
+
+                    TextFormField(
+                      decoration: HuellitasTheme.field('Apellido'),
+                      textCapitalization: TextCapitalization.words,
+                      validator: (v) =>
+                          (v == null || v.trim().isEmpty) ? 'Ingresa tu apellido' : null,
+                      onSaved: (v) => _usuario.apellido = v!.trim(),
+                    ),
+                    const SizedBox(height: 12),
+
+                    TextFormField(
+                      decoration: HuellitasTheme.field('Correo electrónico'),
+                      keyboardType: TextInputType.emailAddress,
+                      validator: (v) {
+                        if (v == null || v.trim().isEmpty) return 'Ingresa tu correo';
+                        if (!v.contains('@') || !v.contains('.')) return 'Correo no válido';
+                        return null;
+                      },
+                      onSaved: (v) => _usuario.correo = v!.trim(),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // ── SECCIÓN: CONTRASEÑA ────────────────────────────────
+                    const SectionLabel('Contraseña'),
+                    const SizedBox(height: 12),
+
+                    TextFormField(
+                      controller: _contrasena1Ctrl,
+                      decoration: HuellitasTheme.field('Contraseña'),
+                      obscureText: true,
+                      validator: (v) {
+                        if (v == null || v.length < 6) return 'Mínimo 6 caracteres';
+                        return null;
+                      },
+                      onSaved: (v) => _usuario.contrasena = v!,
+                    ),
+                    const SizedBox(height: 12),
+
+                    TextFormField(
+                      decoration: HuellitasTheme.field('Confirmar contraseña'),
+                      obscureText: true,
+                      validator: (v) => (v == null || v != _contrasena1Ctrl.text)
+                          ? 'Las contraseñas no coinciden'
+                          : null,
+                    ),
+                    const SizedBox(height: 24),
+
+                    // ── SECCIÓN: MASCOTA ───────────────────────────────────
+                    Container(
+                      decoration: BoxDecoration(
+                        color: HuellitasTheme.arena,
+                        borderRadius: BorderRadius.circular(22),
+                      ),
+                      child: SwitchListTile(
+                        title: const Text(
+                          '¿Tienes mascota?',
+                          style: TextStyle(fontWeight: FontWeight.w700),
                         ),
+                        value: _tieneMascota,
+                        onChanged: (val) => setState(() => _tieneMascota = val),
+                        contentPadding:
+                            const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
                       ),
                     ),
-                  ),
-                ),
-              ),
-              _barraDeAcciones(),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 
-  static const double _anchoMaximo = 480;
-
-  Widget _tarjetaDelPaso(TextTheme textos) {
-    return AbsorbPointer(
-      key: ValueKey(_paso),
-      // Mientras se envía no se puede editar: lo que se ve es lo que se envió.
-      absorbing: _enviando,
-      child: AnimatedOpacity(
-        duration: const Duration(milliseconds: 150),
-        opacity: _enviando ? 0.6 : 1,
-        child: ClayCard(
-          child: Form(
-            key: _formKeys[_paso],
-            autovalidateMode: _pasosConIntento.contains(_paso)
-                ? AutovalidateMode.onUserInteraction
-                : AutovalidateMode.disabled,
-            child: AutofillGroup(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Semantics(
-                    header: true,
-                    child: Text(_titulos[_paso], style: textos.titleLarge),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    _ayudas[_paso],
-                    style: textos.bodyMedium!.copyWith(color: HuellitasTheme.inkSoft),
-                  ),
-                  const SizedBox(height: 22),
-                  ...switch (_paso) {
-                    0 => _camposSobreTi(),
-                    1 => _camposCuenta(),
-                    _ => _camposMascota(),
-                  },
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  /// Barra fija inferior: la acción principal siempre está a la vista, sin
-  /// tener que desplazarse hasta el final del formulario.
-  Widget _barraDeAcciones() {
-    return Container(
-      decoration: const BoxDecoration(
-        color: HuellitasTheme.arena,
-        border: Border(top: BorderSide(color: HuellitasTheme.borde)),
-      ),
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
-      child: Center(
-        heightFactor: 1,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: _anchoMaximo),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (_errorEnvio != null) ...[
-                AvisoError(_errorEnvio!),
-                const SizedBox(height: 12),
-              ],
-              // Con teclado, tras el último campo sigue la acción principal
-              // y después "Atrás", aunque en pantalla "Atrás" va primero.
-              FocusTraversalGroup(
-                policy: OrderedTraversalPolicy(),
-                child: Row(
-                  children: [
-                    if (_paso > 0 || Navigator.of(context).canPop()) ...[
-                      // Con letra grande o pantalla angosta queda solo la
-                      // flecha, para no quitarle espacio al botón principal.
-                      FocusTraversalOrder(
-                        order: const NumericFocusOrder(2),
-                        child: MediaQuery.sizeOf(context).width /
-                                    MediaQuery.textScalerOf(context).scale(1) <
-                                360
-                            ? IconButton(
-                                onPressed: _enviando ? null : _atras,
-                                icon: const Icon(Icons.arrow_back_rounded),
-                                color: HuellitasTheme.ink,
-                                tooltip: 'Atrás',
-                              )
-                            : TextButton.icon(
-                                onPressed: _enviando ? null : _atras,
-                                icon: const Icon(Icons.arrow_back_rounded, size: 20),
-                                label: const Text('Atrás'),
-                              ),
-                      ),
-                      const SizedBox(width: 8),
+                    if (_tieneMascota) ...[
+                      const SizedBox(height: 20),
+                      const SectionLabel('Datos de la mascota'),
+                      const SizedBox(height: 12),
+                      MascotaFormFields(mascota: _mascota),
                     ],
-                    Expanded(
-                      child: FocusTraversalOrder(
-                        order: const NumericFocusOrder(1),
-                        child: ClayButton(
-                          label: !_esUltimoPaso
-                              ? 'Continuar'
-                              : _errorEnvio != null
-                                  ? 'Reintentar'
-                                  : 'Crear mi cuenta',
-                          labelCargando: 'Creando tu cuenta…',
-                          icon: _esUltimoPaso ? null : Icons.arrow_forward_rounded,
-                          cargando: _enviando,
-                          onPressed: _continuar,
-                        ),
+
+                    const SizedBox(height: 28),
+
+                    // ── BOTÓN REGISTRARSE ──────────────────────────────────
+                    ClayButton(
+                      child: ElevatedButton(
+                        onPressed: _cargando ? null : _registrar,
+                        child: _cargando
+                            ? const SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: HuellitasTheme.ink,
+                                ),
+                              )
+                            : const Text('Registrarse'),
                       ),
+                    ),
+                    const SizedBox(height: 20),
+
+                    // ── ENLACE A LOGIN ─────────────────────────────────────
+                    AuthLink(
+                      prefixText: '¿Ya tienes cuenta? ',
+                      linkText: 'Inicia sesión',
+                      onTap: () => Navigator.pop(context),
                     ),
                   ],
                 ),
               ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  static const _espacio = SizedBox(height: 14);
-
-  /// Al enfocar un campo se deja margen para que su ayuda o su error también
-  /// queden a la vista, por encima de la barra de acciones.
-  static const _margenScroll = EdgeInsets.fromLTRB(20, 20, 20, 64);
-
-  // ── PASO 1: SOBRE TI ─────────────────────────────────────────────────────
-
-  List<Widget> _camposSobreTi() {
-    return [
-      TextFormField(
-        controller: _nombreCtrl,
-        scrollPadding: _margenScroll,
-        decoration: HuellitasTheme.field('Nombre'),
-        textCapitalization: TextCapitalization.words,
-        textInputAction: TextInputAction.next,
-        autofillHints: const [AutofillHints.givenName],
-        validator: (v) => Validadores.nombrePersona(v, queFalta: 'tu nombre'),
-      ),
-      _espacio,
-      TextFormField(
-        controller: _apellidoCtrl,
-        scrollPadding: _margenScroll,
-        decoration: HuellitasTheme.field('Apellido'),
-        textCapitalization: TextCapitalization.words,
-        textInputAction: TextInputAction.next,
-        autofillHints: const [AutofillHints.familyName],
-        validator: (v) => Validadores.nombrePersona(v, queFalta: 'tu apellido'),
-      ),
-      _espacio,
-      DropdownButtonFormField<String>(
-        initialValue: _tipoDocumento,
-        decoration: HuellitasTheme.field('Tipo de documento'),
-        isExpanded: true,
-        borderRadius: BorderRadius.circular(HuellitasTheme.radiusField),
-        dropdownColor: HuellitasTheme.leche,
-        icon: const Icon(Icons.expand_more_rounded, color: HuellitasTheme.inkSoft),
-        style: const TextStyle(
-          fontFamily: HuellitasTheme.fontBody,
-          fontSize: 16,
-          color: HuellitasTheme.ink,
-        ),
-        items: [
-          for (final t in Opciones.tiposDocumento)
-            DropdownMenuItem(value: t, child: Text(t, overflow: TextOverflow.ellipsis)),
-        ],
-        onChanged: (v) {
-          if (v == null || v == _tipoDocumento) return;
-          setState(() => _tipoDocumento = v);
-          // Las reglas del número cambian con el tipo: si ya había un error
-          // a la vista, se vuelve a evaluar.
-          if (_pasosConIntento.contains(0)) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted && _paso == 0) _formKeys[0].currentState?.validate();
-            });
-          }
-        },
-      ),
-      _espacio,
-      TextFormField(
-        controller: _documentoCtrl,
-        scrollPadding: _margenScroll,
-        decoration: HuellitasTheme.field(
-          'Número de documento',
-          helper: _esPasaporte ? 'Letras y números, sin espacios' : 'Solo números, sin puntos',
-        ),
-        keyboardType: _esPasaporte ? TextInputType.visiblePassword : TextInputType.number,
-        textCapitalization: _esPasaporte ? TextCapitalization.characters : TextCapitalization.none,
-        textInputAction: TextInputAction.done,
-        autocorrect: false,
-        enableSuggestions: false,
-        inputFormatters: [
-          // Las letras no se descartan en silencio aunque el tipo sea cédula:
-          // el validador explica qué hacer (p. ej. cambiar a pasaporte).
-          FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9]')),
-          const _Mayusculas(),
-          LengthLimitingTextInputFormatter(12),
-        ],
-        validator: (v) => Validadores.documento(_tipoDocumento, v),
-        onFieldSubmitted: (_) => _continuar(),
-      ),
-    ];
-  }
-
-  // ── PASO 2: TU CUENTA ────────────────────────────────────────────────────
-
-  List<Widget> _camposCuenta() {
-    final clave = _contrasenaCtrl.text;
-    final botonVer = IconButton(
-      icon: Icon(_verContrasena ? Icons.visibility_off_rounded : Icons.visibility_rounded),
-      tooltip: _verContrasena ? 'Ocultar contraseña' : 'Mostrar contraseña',
-      onPressed: () => setState(() => _verContrasena = !_verContrasena),
-    );
-
-    return [
-      TextFormField(
-        controller: _correoCtrl,
-        scrollPadding: _margenScroll,
-        decoration: HuellitasTheme.field(
-          'Correo electrónico',
-          hint: 'nombre@correo.com',
-        ),
-        keyboardType: TextInputType.emailAddress,
-        textInputAction: TextInputAction.next,
-        autocorrect: false,
-        enableSuggestions: false,
-        autofillHints: const [AutofillHints.email],
-        inputFormatters: [FilteringTextInputFormatter.deny(RegExp(r'\s'))],
-        validator: Validadores.correo,
-      ),
-      _espacio,
-      TextFormField(
-        controller: _contrasenaCtrl,
-        scrollPadding: _margenScroll,
-        decoration: HuellitasTheme.field(
-          'Contraseña',
-          suffixIcon: Padding(
-            padding: const EdgeInsets.only(right: 6),
-            child: botonVer,
-          ),
-        ),
-        obscureText: !_verContrasena,
-        textInputAction: TextInputAction.next,
-        autocorrect: false,
-        enableSuggestions: false,
-        autofillHints: const [AutofillHints.newPassword],
-        validator: Validadores.contrasena,
-      ),
-      const SizedBox(height: 10),
-      _Requisito('Mínimo ${Validadores.contrasenaMinima} caracteres',
-          cumplido: Validadores.tieneLongitud(clave)),
-      _Requisito('Al menos una letra', cumplido: Validadores.tieneLetra(clave)),
-      _Requisito('Al menos un número', cumplido: Validadores.tieneNumero(clave)),
-      _espacio,
-      TextFormField(
-        controller: _confirmarCtrl,
-        scrollPadding: _margenScroll,
-        decoration: HuellitasTheme.field('Repite la contraseña'),
-        obscureText: !_verContrasena,
-        textInputAction: TextInputAction.done,
-        autocorrect: false,
-        enableSuggestions: false,
-        autofillHints: const [AutofillHints.newPassword],
-        validator: (v) => Validadores.confirmacion(v, _contrasenaCtrl.text),
-        onFieldSubmitted: (_) => _continuar(),
-      ),
-    ];
-  }
-
-  // ── PASO 3: TU MASCOTA ───────────────────────────────────────────────────
-
-  List<Widget> _camposMascota() {
-    final esOtro = _mascotaTipo == Opciones.otraMascota;
-
-    return [
-      const _EtiquetaGrupo('¿Tienes mascota?'),
-      ClayChoice<bool>(
-        semanticLabel: '¿Tienes mascota?',
-        options: const [true, false],
-        value: _tieneMascota,
-        labelOf: (v) => v ? 'Sí' : 'Todavía no',
-        onChanged: (v) => setState(() => _tieneMascota = v),
-      ),
-      if (!_tieneMascota) ...[
-        const SizedBox(height: 16),
-        Text(
-          'No hay problema. Crea tu cuenta y listo.',
-          style: Theme.of(context).textTheme.bodyMedium!.copyWith(color: HuellitasTheme.inkSoft),
-        ),
-      ] else ...[
-        const SizedBox(height: 18),
-        TextFormField(
-          controller: _mascotaNombreCtrl,
-          scrollPadding: _margenScroll,
-          decoration: HuellitasTheme.field('Nombre de tu mascota'),
-          textCapitalization: TextCapitalization.words,
-          textInputAction: TextInputAction.next,
-          validator: (v) => Validadores.obligatorio(v, mensaje: 'Escribe el nombre de tu mascota'),
-        ),
-        const SizedBox(height: 18),
-        const _EtiquetaGrupo('¿Qué animal es?'),
-        ClayChoice<String>(
-          semanticLabel: 'Tipo de mascota',
-          options: Opciones.tiposMascota,
-          value: _mascotaTipo,
-          labelOf: (t) => t,
-          onChanged: (t) {
-            setState(() => _mascotaTipo = t);
-            // Al elegir "Otro" se puede escribir la especie de inmediato.
-            if (t == Opciones.otraMascota) _focoEspecie.requestFocus();
-          },
-        ),
-        if (esOtro) ...[
-          _espacio,
-          TextFormField(
-            controller: _mascotaEspecieCtrl,
-            focusNode: _focoEspecie,
-            scrollPadding: _margenScroll,
-            decoration: HuellitasTheme.field('¿Cuál?', hint: 'Conejo, ave, hámster…'),
-            textCapitalization: TextCapitalization.sentences,
-            textInputAction: TextInputAction.next,
-            validator: (v) => Validadores.obligatorio(v, mensaje: 'Cuéntanos qué animal es'),
-          ),
-        ],
-        const SizedBox(height: 18),
-        const _EtiquetaGrupo('¿Qué edad tiene?'),
-        // Un solo FormField para número + unidad: el mensaje de error ocupa
-        // todo el ancho en vez de quedar apretado bajo el campo angosto.
-        FormField<String>(
-          initialValue: _mascotaEdadCtrl.text,
-          validator: (_) => Validadores.edad(
-            _mascotaEdadCtrl.text,
-            _unidadEdad,
-            tipo: _mascotaTipo,
-          ),
-          builder: (estado) => Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              LayoutBuilder(
-                builder: (context, caja) {
-                  // Nodo propio: el lector de pantalla anuncia "Edad" como
-                  // campo y la unidad como grupo aparte.
-                  final numero = Semantics(
-                    container: true,
-                    child: TextField(
-                      controller: _mascotaEdadCtrl,
-                      scrollPadding: _margenScroll,
-                      decoration: HuellitasTheme.field('Edad').copyWith(
-                        // Borde de error sin repetir el texto dentro del campo.
-                        error: estado.hasError ? const SizedBox.shrink() : null,
-                      ),
-                      keyboardType: TextInputType.number,
-                      textInputAction: TextInputAction.next,
-                      inputFormatters: [
-                        FilteringTextInputFormatter.digitsOnly,
-                        LengthLimitingTextInputFormatter(3),
-                      ],
-                      onChanged: estado.didChange,
-                    ),
-                  );
-                  final unidad = ClayChoice<String>(
-                    semanticLabel: 'Unidad de la edad',
-                    options: Opciones.unidadesEdad,
-                    value: _unidadEdad,
-                    labelOf: (u) => u == Opciones.anios ? 'Años' : 'Meses',
-                    onChanged: (u) {
-                      setState(() => _unidadEdad = u);
-                      // La regla depende de la unidad: se reevalúa si ya
-                      // había un error a la vista.
-                      if (estado.hasError) {
-                        WidgetsBinding.instance.addPostFrameCallback((_) {
-                          if (estado.mounted) estado.validate();
-                        });
-                      }
-                    },
-                  );
-                  // Con letra grande o pantalla angosta se apilan para que
-                  // el número y las opciones sigan siendo legibles.
-                  final escala = MediaQuery.textScalerOf(context).scale(1);
-                  if (caja.maxWidth / escala < 270) {
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [numero, const SizedBox(height: 10), unidad],
-                    );
-                  }
-                  return Row(
-                    children: [
-                      Expanded(flex: 4, child: numero),
-                      const SizedBox(width: 10),
-                      Expanded(flex: 7, child: unidad),
-                    ],
-                  );
-                },
-              ),
-              if (estado.hasError)
-                Padding(
-                  padding: const EdgeInsets.only(left: 26, top: 6),
-                  child: Semantics(
-                    liveRegion: true,
-                    child: Text(
-                      estado.errorText!,
-                      style: Theme.of(context).inputDecorationTheme.errorStyle,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
-        _espacio,
-        TextFormField(
-          controller: _mascotaRazaCtrl,
-          scrollPadding: _margenScroll,
-          decoration: HuellitasTheme.field(
-            'Raza (opcional)',
-            helper: 'Si no la sabes, déjala en blanco.',
-          ),
-          textCapitalization: TextCapitalization.words,
-          textInputAction: TextInputAction.next,
-        ),
-        _espacio,
-        TextFormField(
-          controller: _mascotaPesoCtrl,
-          scrollPadding: _margenScroll,
-          decoration: HuellitasTheme.field('Peso en kg (opcional)', hint: 'Ej.: 4,5'),
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          textInputAction: TextInputAction.done,
-          inputFormatters: [
-            FilteringTextInputFormatter.allow(RegExp(r'[\d.,]')),
-            LengthLimitingTextInputFormatter(7),
-          ],
-          validator: Validadores.peso,
-          onFieldSubmitted: (_) => _continuar(),
-        ),
-      ],
-    ];
-  }
-}
-
-/// Convierte a mayúsculas lo escrito (números de pasaporte).
-class _Mayusculas extends TextInputFormatter {
-  const _Mayusculas();
-
-  @override
-  TextEditingValue formatEditUpdate(TextEditingValue anterior, TextEditingValue nuevo) {
-    return nuevo.copyWith(text: nuevo.text.toUpperCase());
-  }
-}
-
-/// Pregunta corta encima de un selector o grupo de campos.
-class _EtiquetaGrupo extends StatelessWidget {
-  final String text;
-  const _EtiquetaGrupo(this.text);
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(left: 4, bottom: 8),
-      child: ExcludeSemantics(
-        // El selector que sigue ya anuncia esta pregunta como su etiqueta.
-        child: Text(text, style: Theme.of(context).textTheme.labelLarge),
-      ),
-    );
-  }
-}
-
-/// Requisito de la contraseña que se marca en vivo al cumplirse.
-class _Requisito extends StatelessWidget {
-  final String text;
-  final bool cumplido;
-  const _Requisito(this.text, {required this.cumplido});
-
-  @override
-  Widget build(BuildContext context) {
-    final color = cumplido ? HuellitasTheme.mentaInk : HuellitasTheme.inkSoft;
-    return Semantics(
-      label: '$text: ${cumplido ? 'cumplido' : 'pendiente'}',
-      child: ExcludeSemantics(
-        child: Padding(
-          padding: const EdgeInsets.only(left: 6, top: 4),
-          child: Row(
-            children: [
-              Icon(
-                cumplido ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
-                size: 18,
-                color: color,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  text,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: cumplido ? FontWeight.w700 : FontWeight.w600,
-                    color: color,
-                  ),
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),
