@@ -138,6 +138,15 @@ caso('el dueño solo puede cancelar: no borra ni cambia otros datos', async () =
   await assertSucceeds(b.commit());
   await assertFails(updateDoc(doc(d, 'usuarios/ana/citas/c0'), { estado: 'cancelada' })); // ya no está pendiente
 });
+caso('cancelar una cita antigua (con veterinario pero sin cupo en la agenda)', async () => {
+  await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), 'usuarios/ana/citas/vieja'),
+    { mascota: 'Luna', servicio: 'Control', fecha: '2030-03-01', hora: '10:30', veterinarioId: 'vet1', veterinarioNombre: 'Vet Uno' }));
+  const d = db('ana');
+  const b = writeBatch(d);
+  b.update(doc(d, 'usuarios/ana/citas/vieja'), { estado: 'cancelada' });
+  b.delete(doc(d, 'agenda/vet1_2030-03-01_10:30'));
+  await assertSucceeds(b.commit());
+});
 caso('nadie libera el cupo de otro usuario', async () => {
   await assertFails(deleteDoc(doc(db('beto'), 'agenda/vet1_2030-01-10_08:00')));
 });

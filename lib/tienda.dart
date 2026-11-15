@@ -5,6 +5,7 @@ import 'huellitas_theme.dart';
 import 'widgets.dart';
 import 'repositories/producto_repository.dart';
 import 'repositories/carrito_repository.dart';
+import 'pedidos.dart';
 
 class TiendaPage extends StatefulWidget {
   final UsuarioModel usuario;
@@ -42,15 +43,26 @@ class _TiendaPageState extends State<TiendaPage> {
 
   double get _totalPrecio => _carrito.fold(0.0, (acc, i) => acc + i.subtotal);
 
-  void _agregar(ProductoModel p) =>
-      CarritoRepository.agregar(widget.usuario.uid!, p);
+  Future<void> _agregar(ProductoModel p) async {
+    try {
+      await CarritoRepository.agregar(widget.usuario.uid!, p);
+    } catch (e) {
+      if (mounted) mostrarAviso(context, mensajeDeError(e), error: true);
+    }
+  }
+
+  void _verPedidos() => Navigator.push(
+        context,
+        MaterialPageRoute(
+            builder: (_) => PedidosPage(uid: widget.usuario.uid!)),
+      );
 
   void _abrirCarrito() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _CarritoSheet(uid: widget.usuario.uid!),
+      builder: (_) => _CarritoSheet(usuario: widget.usuario),
     );
   }
 
@@ -64,6 +76,12 @@ class _TiendaPageState extends State<TiendaPage> {
         automaticallyImplyLeading: false,
         elevation: 0,
         actions: [
+          IconButton(
+            onPressed: _verPedidos,
+            tooltip: 'Mis pedidos',
+            icon: const Icon(Icons.receipt_long_outlined,
+                color: HuellitasTheme.ink),
+          ),
           if (_totalItems > 0)
             Padding(
               padding: const EdgeInsets.only(right: 8),
@@ -187,7 +205,10 @@ class _ProductoCard extends StatelessWidget {
                   ),
                 ],
                 const SizedBox(height: 4),
-                Row(children: [
+                Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    runSpacing: 4,
+                    children: [
                   Text(
                     _fmtPrecio(producto.precio),
                     style: const TextStyle(
@@ -196,22 +217,16 @@ class _ProductoCard extends StatelessWidget {
                       color: HuellitasTheme.lavanda,
                     ),
                   ),
-                  if (producto.stock >= 1 && producto.stock <= 5) ...[
+                  if (producto.estado == EstadoProducto.agotado) ...[
                     const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 1),
-                      decoration: BoxDecoration(
-                        color: HuellitasTheme.lima,
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Text(
-                        '${producto.stock} disp.',
-                        style: const TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
-                            color: HuellitasTheme.ink),
-                      ),
+                    const EstadoChip('Agotado', color: HuellitasTheme.coral),
+                  ] else if (producto.estado == EstadoProducto.stockBajo) ...[
+                    const SizedBox(width: 8),
+                    EstadoChip(
+                      producto.stock == 1
+                          ? 'Queda 1'
+                          : 'Quedan ${producto.stock}',
+                      color: HuellitasTheme.lima,
                     ),
                   ],
                 ]),
@@ -233,13 +248,22 @@ class _ProductoCard extends StatelessWidget {
                     fontWeight: FontWeight.w800,
                     color: HuellitasTheme.ink),
               ),
-            )
-          else
-            IconButton(
-              onPressed: onAgregar,
-              icon: const Icon(Icons.add_circle_outline_rounded, size: 28),
-              color: HuellitasTheme.ink,
             ),
+          // Se puede seguir agregando desde la lista, hasta agotar el stock.
+          IconButton(
+            onPressed: producto.sePuedeComprar &&
+                    cantidadEnCarrito < producto.stock
+                ? onAgregar
+                : null,
+            tooltip: !producto.sePuedeComprar
+                ? 'Agotado'
+                : cantidadEnCarrito >= producto.stock
+                    ? 'No hay más unidades'
+                    : 'Agregar al carrito',
+            icon: const Icon(Icons.add_circle_outline_rounded, size: 28),
+            color: HuellitasTheme.ink,
+            disabledColor: HuellitasTheme.inkSoft.withAlpha(90),
+          ),
         ],
       ),
     );
@@ -249,8 +273,8 @@ class _ProductoCard extends StatelessWidget {
 // ── HOJA CARRITO (reactiva) ────────────────────────────────────────────────────
 
 class _CarritoSheet extends StatefulWidget {
-  final String uid;
-  const _CarritoSheet({required this.uid});
+  final UsuarioModel usuario;
+  const _CarritoSheet({required this.usuario});
 
   @override
   State<_CarritoSheet> createState() => _CarritoSheetState();
@@ -258,39 +282,86 @@ class _CarritoSheet extends StatefulWidget {
 
 class _CarritoSheetState extends State<_CarritoSheet> {
   List<CarritoItemModel> _carrito = [];
+  // Catálogo vigente: precio y stock actuales de cada producto del carrito.
+  Map<String, ProductoModel> _productos = {};
   StreamSubscription<List<CarritoItemModel>>? _sub;
+  StreamSubscription<List<ProductoModel>>? _subP;
   bool _confirmando = false;
+  String? _error;
+
+  String get _uid => widget.usuario.uid!;
 
   @override
   void initState() {
     super.initState();
-    _sub = CarritoRepository.stream(widget.uid).listen((items) {
+    _sub = CarritoRepository.stream(_uid).listen((items) {
       if (mounted) setState(() => _carrito = items);
+    });
+    _subP = ProductoRepository.stream().listen((lista) {
+      if (mounted) {
+        setState(() => _productos = {for (final p in lista) p.id!: p});
+      }
     });
   }
 
   @override
   void dispose() {
     _sub?.cancel();
+    _subP?.cancel();
     super.dispose();
   }
 
-  double get _total => _carrito.fold(0.0, (acc, i) => acc + i.subtotal);
+  /// Precio vigente de una línea (el del catálogo, si ya cargó).
+  double _precio(CarritoItemModel i) =>
+      _productos[i.productoId]?.precio ?? i.precio;
+
+  double get _total =>
+      _carrito.fold(0.0, (acc, i) => acc + _precio(i) * i.cantidad);
+
+  /// Por qué una línea no se puede comprar tal como está, o null si está bien.
+  String? _problema(CarritoItemModel i) {
+    if (_productos.isEmpty) return null; // catálogo aún cargando
+    final p = _productos[i.productoId];
+    if (p == null || !p.activo) return 'Ya no está disponible';
+    if (p.stock == 0) return 'Agotado';
+    if (p.stock < i.cantidad) return 'Solo quedan ${p.stock}';
+    return null;
+  }
+
+  bool get _hayProblemas => _carrito.any((i) => _problema(i) != null);
+
+  Future<void> _mas(CarritoItemModel i) async {
+    final p = _productos[i.productoId];
+    if (p == null) return;
+    try {
+      await CarritoRepository.agregar(_uid, p);
+    } catch (e) {
+      if (mounted) setState(() => _error = mensajeDeError(e));
+    }
+  }
 
   Future<void> _confirmar() async {
     if (_confirmando || _carrito.isEmpty) return;
-    setState(() => _confirmando = true);
-    await CarritoRepository.confirmarPedido(widget.uid, _carrito);
-    if (mounted) {
+    setState(() {
+      _confirmando = true;
+      _error = null;
+    });
+    try {
+      await CarritoRepository.confirmarPedido(
+        _uid,
+        _carrito,
+        clienteNombre: widget.usuario.nombreCompleto,
+      );
+      if (!mounted) return;
       Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: const Text('¡Pedido confirmado! Pronto lo recibirás.',
-            style: TextStyle(fontWeight: FontWeight.w700)),
-        backgroundColor: HuellitasTheme.lima,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16)),
-      ));
+      mostrarAviso(context,
+          'Pedido confirmado. Sigue su estado en "Mis pedidos".');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _confirmando = false;
+        _error = mensajeDeError(e);
+      });
     }
   }
 
@@ -334,7 +405,19 @@ class _CarritoSheetState extends State<_CarritoSheet> {
               ),
             )
           else ...[
-            ..._carrito.map((item) => _CarritoRow(item: item, uid: widget.uid)),
+            ..._carrito.map((item) => _CarritoRow(
+                  item: item,
+                  precio: _precio(item),
+                  problema: _problema(item),
+                  puedeSumar: (_productos[item.productoId]?.sePuedeComprar ??
+                          false) &&
+                      item.cantidad < (_productos[item.productoId]?.stock ?? 0),
+                  onMenos: () =>
+                      CarritoRepository.decrementar(_uid, item.productoId),
+                  onMas: () => _mas(item),
+                  onQuitar: () =>
+                      CarritoRepository.eliminar(_uid, item.productoId),
+                )),
             const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.all(16),
@@ -358,10 +441,26 @@ class _CarritoSheetState extends State<_CarritoSheet> {
                 ],
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 8),
+            Text(
+              'Recoges y pagas tu pedido en la clínica.',
+              textAlign: TextAlign.center,
+              style: Theme.of(context)
+                  .textTheme
+                  .bodyMedium
+                  ?.copyWith(color: HuellitasTheme.inkSoft, fontSize: 12),
+            ),
+            const SizedBox(height: 14),
+            if (_error != null) ...[
+              AvisoEnLinea(_error!),
+              const SizedBox(height: 12),
+            ],
             ClayButton(
               child: ElevatedButton(
-                onPressed: _confirmando ? null : _confirmar,
+                // Con una línea agotada o sin stock suficiente no se confirma:
+                // primero hay que ajustarla.
+                onPressed:
+                    _confirmando || _hayProblemas ? null : _confirmar,
                 child: _confirmando
                     ? const SizedBox(
                         height: 20,
@@ -381,8 +480,21 @@ class _CarritoSheetState extends State<_CarritoSheet> {
 
 class _CarritoRow extends StatelessWidget {
   final CarritoItemModel item;
-  final String uid;
-  const _CarritoRow({required this.item, required this.uid});
+  final double precio;
+  final String? problema;
+  final bool puedeSumar;
+  final VoidCallback onMenos;
+  final VoidCallback onMas;
+  final VoidCallback onQuitar;
+  const _CarritoRow({
+    required this.item,
+    required this.precio,
+    required this.problema,
+    required this.puedeSumar,
+    required this.onMenos,
+    required this.onMas,
+    required this.onQuitar,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -397,40 +509,41 @@ class _CarritoRow extends StatelessWidget {
                 Text(item.nombre,
                     style: const TextStyle(
                         fontSize: 14, fontWeight: FontWeight.w600)),
-                Text(_fmtPrecio(item.precio),
+                Text(fmtPrecio(precio),
                     style: const TextStyle(
                         fontSize: 12, color: HuellitasTheme.inkSoft)),
+                if (problema != null) ...[
+                  const SizedBox(height: 4),
+                  Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                    EstadoChip(problema!, color: HuellitasTheme.coral),
+                    TextButton(
+                      onPressed: onQuitar,
+                      style: TextButton.styleFrom(
+                          visualDensity: VisualDensity.compact),
+                      child: const Text('Quitar'),
+                    ),
+                  ]),
+                ],
               ],
             ),
           ),
-          _QtyBtn(
-            icon: Icons.remove,
-            onPressed: () =>
-                CarritoRepository.decrementar(uid, item.productoId),
-          ),
+          _QtyBtn(icon: Icons.remove, onPressed: onMenos),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: Text('${item.cantidad}',
                 style: const TextStyle(
                     fontSize: 15, fontWeight: FontWeight.w700)),
           ),
-          _QtyBtn(
-            icon: Icons.add,
-            onPressed: () => CarritoRepository.agregar(
-              uid,
-              ProductoModel(
-                  id: item.productoId,
-                  nombre: item.nombre,
-                  precio: item.precio),
-            ),
-          ),
+          _QtyBtn(icon: Icons.add, onPressed: puedeSumar ? onMas : null),
           const SizedBox(width: 10),
           Text(
-            _fmtPrecio(item.subtotal),
+            fmtPrecio(precio * item.cantidad),
             style: const TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w700,
-                color: HuellitasTheme.lavanda),
+                color: HuellitasTheme.ink),
           ),
         ],
       ),
@@ -440,21 +553,21 @@ class _CarritoRow extends StatelessWidget {
 
 class _QtyBtn extends StatelessWidget {
   final IconData icon;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed; // null = desactivado
   const _QtyBtn({required this.icon, required this.onPressed});
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onPressed,
-      child: Container(
-        width: 28,
-        height: 28,
-        decoration: BoxDecoration(
-          color: HuellitasTheme.arena,
-          borderRadius: BorderRadius.circular(999),
-        ),
-        child: Icon(icon, size: 16, color: HuellitasTheme.ink),
+    return IconButton(
+      onPressed: onPressed,
+      icon: Icon(icon, size: 16),
+      tooltip: icon == Icons.add ? 'Una más' : 'Una menos',
+      color: HuellitasTheme.ink,
+      disabledColor: HuellitasTheme.inkSoft.withAlpha(90),
+      style: IconButton.styleFrom(
+        backgroundColor: HuellitasTheme.arena,
+        minimumSize: const Size(36, 36),
+        padding: EdgeInsets.zero,
       ),
     );
   }

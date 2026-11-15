@@ -48,7 +48,7 @@ class _InicioDashboardState extends State<InicioDashboard> {
 
   CitaModel? get _proximaCita {
     final proximas = _citas.where((c) => c.esProxima).toList()
-      ..sort((a, b) => a.fecha.compareTo(b.fecha));
+      ..sort((a, b) => a.claveOrden.compareTo(b.claveOrden));
     return proximas.isEmpty ? null : proximas.first;
   }
 

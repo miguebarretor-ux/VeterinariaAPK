@@ -105,7 +105,10 @@ service cloud.firestore {
                     && cupoId == request.resource.data.veterinarioId + '_' + request.resource.data.fecha + '_' + request.resource.data.hora
                     && (request.resource.data.duenoUid == request.auth.uid || esAdmin())
                     && getAfter(/databases/$(database)/documents/usuarios/$(request.resource.data.duenoUid)/citas/$(request.resource.data.citaId)).data.veterinarioId == request.resource.data.veterinarioId;
-      allow delete: if esDueno(resource.data.duenoUid) || esAdmin();
+      // `resource == null`: liberar un cupo que no existe (citas anteriores a
+      // la agenda) no debe hacer fallar la cancelación.
+      allow delete: if autenticado()
+                    && (resource == null || resource.data.duenoUid == request.auth.uid || esAdmin());
     }
 
     // ── SERVICIOS Y CATÁLOGO DE VACUNAS ───────────────────────────────────────
@@ -124,8 +127,9 @@ service cloud.firestore {
       allow write: if esAdmin();
       // Al comprar, un cliente solo puede bajar el stock, nunca dejarlo en
       // negativo ni tocar precio, nombre o visibilidad.
-      // (Que la rebaja coincida con un pedido real solo se puede garantizar
-      // del lado del servidor: ver README_SEGURIDAD.md.)
+      // Que la rebaja coincida con un pedido real y que el total del pedido
+      // sea correcto solo se puede garantizar del lado del servidor (Cloud
+      // Function); aquí se limita el daño posible.
       allow update: if autenticado()
                     && cambiaSolo(['stock'])
                     && request.resource.data.stock is int

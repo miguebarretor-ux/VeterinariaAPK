@@ -503,8 +503,11 @@ class _CitaSheetState extends State<_CitaSheet> {
               DropdownButtonFormField<String>(
                 initialValue: _mascotaId,
                 decoration: HuellitasTheme.field('Mascota'),
+                isExpanded: true,
                 items: widget.mascotas
-                    .map((m) => DropdownMenuItem(value: m.id, child: Text(m.nombre)))
+                    .map((m) => DropdownMenuItem(
+                        value: m.id,
+                        child: Text(m.nombre, overflow: TextOverflow.ellipsis)))
                     .toList(),
                 onChanged: (v) => setState(() => _mascotaId = v),
               ),
@@ -515,8 +518,11 @@ class _CitaSheetState extends State<_CitaSheet> {
                 key: ValueKey('servicio-$_servicio-${_servicios.length}'),
                 initialValue: _servicio,
                 decoration: HuellitasTheme.field('Servicio'),
+                isExpanded: true,
                 items: _servicios
-                    .map((s) => DropdownMenuItem(value: s, child: Text(s)))
+                    .map((s) => DropdownMenuItem(
+                        value: s,
+                        child: Text(s, overflow: TextOverflow.ellipsis)))
                     .toList(),
                 onChanged: (v) => setState(() => _servicio = v),
               ),
@@ -587,16 +593,18 @@ class _CitaSheetState extends State<_CitaSheet> {
                       const Icon(Icons.calendar_today_outlined,
                           size: 18, color: HuellitasTheme.inkSoft),
                       const SizedBox(width: 10),
-                      ExcludeSemantics(
-                        child: Text(
-                          _fecha == null
-                              ? 'Seleccionar fecha'
-                              : _fmtDate(_fecha!),
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: _fecha == null
-                                ? HuellitasTheme.inkSoft
-                                : HuellitasTheme.ink,
+                      Expanded(
+                        child: ExcludeSemantics(
+                          child: Text(
+                            _fecha == null
+                                ? 'Seleccionar fecha'
+                                : _fmtDate(_fecha!),
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: _fecha == null
+                                  ? HuellitasTheme.inkSoft
+                                  : HuellitasTheme.ink,
+                            ),
                           ),
                         ),
                       ),

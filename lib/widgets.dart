@@ -209,12 +209,15 @@ class EstadoChip extends StatelessWidget {
             Icon(icono, size: 12, color: HuellitasTheme.ink),
             const SizedBox(width: 4),
           ],
-          Text(
-            texto,
-            style: const TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
-                color: HuellitasTheme.ink),
+          Flexible(
+            child: Text(
+              texto,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  color: HuellitasTheme.ink),
+            ),
           ),
         ],
       ),
