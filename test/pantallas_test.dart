@@ -89,6 +89,16 @@ void main() {
       expect(await CitaRepository.horasOcupadas('vet1', fecha), isEmpty);
     });
 
+    testWidgets('al agendar se ofrecen los veterinarios registrados', (tester) async {
+      await abrir(tester, CitasPage(usuario: ana()));
+      await tester.tap(find.text('Agendar'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Sin preferencia'));
+      await tester.pumpAndSettle();
+      expect(find.text('Laura Ríos · Felinos'), findsWidgets);
+    });
+
     testWidgets('una cita sin veterinario lo indica', (tester) async {
       await CitaRepository.agendar('ana', cita());
       await abrir(tester, CitasPage(usuario: ana()));

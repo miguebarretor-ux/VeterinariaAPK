@@ -309,6 +309,7 @@ class _CitaSheetState extends State<_CitaSheet> {
 
   List<UsuarioModel> _vets = [];
   bool _cargandoVets = true;
+  bool _errorVets = false;
   String? _vetId;
 
   /// Horas que el veterinario elegido ya tiene reservadas en la fecha elegida.
@@ -328,9 +329,13 @@ class _CitaSheetState extends State<_CitaSheet> {
     // "sin preferencia", y sin servicios se usa la lista de respaldo.
     List<UsuarioModel> vets = [];
     List<ServicioModel> svcs = [];
+    var errorVets = false;
     try {
       vets = await UsuarioRepository.veterinariosOnce();
-    } catch (_) {}
+    } catch (_) {
+      // Antes este fallo se veía igual que "no hay veterinarios".
+      errorVets = true;
+    }
     try {
       svcs = await ServicioRepository.streamActivos()
           .first
@@ -340,6 +345,7 @@ class _CitaSheetState extends State<_CitaSheet> {
     setState(() {
       _vets = vets;
       _cargandoVets = false;
+      _errorVets = errorVets;
       if (svcs.isNotEmpty) _servicios = svcs.map((s) => s.nombre).toList();
       _servicio = _servicios.first;
     });
@@ -560,7 +566,13 @@ class _CitaSheetState extends State<_CitaSheet> {
                     _actualizarOcupadas();
                   },
                 ),
-              if (!_cargandoVets && _vetId == null)
+              if (_errorVets)
+                const Padding(
+                  padding: EdgeInsets.only(top: 8),
+                  child: AvisoEnLinea(
+                      'No pudimos cargar los veterinarios. Puedes agendar sin preferencia y la clínica te asignará uno.'),
+                )
+              else if (!_cargandoVets && _vetId == null)
                 Padding(
                   padding: const EdgeInsets.only(top: 6, left: 8),
                   child: Text(
