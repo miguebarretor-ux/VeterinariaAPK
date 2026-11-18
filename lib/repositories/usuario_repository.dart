@@ -1,8 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../mascota_model.dart';
+import 'db.dart';
 
 class UsuarioRepository {
-  static final _col = FirebaseFirestore.instance.collection('usuarios');
+  static CollectionReference<Map<String, dynamic>> get _col =>
+      Db.i.collection('usuarios');
 
   // ── Crear ─────────────────────────────────────────────────────────────────
   static Future<void> crear(String uid, UsuarioModel u) =>
@@ -41,13 +43,33 @@ class UsuarioRepository {
           .map((d) => UsuarioModel.fromFirestore(d.id, d.data()))
           .toList());
 
-  // ── Obtener lista de veterinarios una sola vez (para formularios) ─────────
+  // ── Veterinarios activos, una sola vez (para agendar y asignar) ───────────
   static Future<List<UsuarioModel>> veterinariosOnce() async {
     final snap = await _col.where('rol', isEqualTo: 'veterinario').get();
     return snap.docs
         .map((d) => UsuarioModel.fromFirestore(d.id, d.data()))
-        .toList();
+        .where((v) => v.activo)
+        .toList()
+      ..sort((a, b) => a.nombreCompleto.compareTo(b.nombreCompleto));
   }
+
+  // ── Editar datos de un veterinario (admin) ────────────────────────────────
+  static Future<void> actualizarVeterinario(
+    String uid, {
+    required String nombre,
+    required String apellido,
+    required String especialidad,
+  }) =>
+      _col.doc(uid).update({
+        'nombre': nombre,
+        'apellido': apellido,
+        'especialidad': especialidad,
+      });
+
+  /// Activa o desactiva a un veterinario. Inactivo no aparece al agendar ni
+  /// puede iniciar sesión; sus citas e historial se conservan.
+  static Future<void> cambiarActivo(String uid, bool activo) =>
+      _col.doc(uid).update({'activo': activo});
 
   // ── Agregar vacuna a una mascota ──────────────────────────────────────────
   static Future<void> agregarVacuna(

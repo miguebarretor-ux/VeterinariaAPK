@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'mascota_model.dart';
 import 'huellitas_theme.dart';
 import 'widgets.dart';
+import 'services/auth_service.dart';
 import 'repositories/usuario_repository.dart';
 
 class AdminVeterinariosPage extends StatefulWidget {
@@ -43,18 +44,35 @@ class _AdminVeterinariosPageState extends State<AdminVeterinariosPage> {
     super.dispose();
   }
 
-  void _agregarVet() {
+  /// Abre el formulario: vacío para registrar, o con [vet] para editarlo.
+  void _agregarVet([UsuarioModel? vet]) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => Padding(
+      builder: (ctx) => Padding(
         padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom,
+          bottom: MediaQuery.of(ctx).viewInsets.bottom,
         ),
-        child: const _NuevoVetSheet(),
+        child: _NuevoVetSheet(vet: vet),
       ),
     );
+  }
+
+  Future<void> _cambiarActivo(UsuarioModel vet, bool activo) async {
+    try {
+      await UsuarioRepository.cambiarActivo(vet.uid!, activo);
+      if (mounted) {
+        mostrarAviso(
+          context,
+          activo
+              ? '${vet.nombreCompleto} vuelve a recibir citas.'
+              : '${vet.nombreCompleto} ya no recibe citas nuevas ni puede entrar.',
+        );
+      }
+    } catch (e) {
+      if (mounted) mostrarAviso(context, mensajeDeError(e), error: true);
+    }
   }
 
   @override
@@ -117,7 +135,11 @@ class _AdminVeterinariosPageState extends State<AdminVeterinariosPage> {
         const SizedBox(height: 20),
         const SectionLabel('Equipo veterinario'),
         const SizedBox(height: 12),
-        ..._vets.map((v) => _VetCard(vet: v)),
+        ..._vets.map((v) => _VetCard(
+              vet: v,
+              onEditar: () => _agregarVet(v),
+              onActivo: (a) => _cambiarActivo(v, a),
+            )),
       ],
     );
   }
@@ -164,21 +186,28 @@ class _AdminVeterinariosPageState extends State<AdminVeterinariosPage> {
 
 class _VetCard extends StatelessWidget {
   final UsuarioModel vet;
-  const _VetCard({required this.vet});
+  final VoidCallback onEditar;
+  final ValueChanged<bool> onActivo;
+  const _VetCard({
+    required this.vet,
+    required this.onEditar,
+    required this.onActivo,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      decoration: HuellitasTheme.cardBox(),
-      padding: const EdgeInsets.all(20),
+      decoration: HuellitasTheme.cardBox(
+          color: vet.activo ? HuellitasTheme.leche : HuellitasTheme.arena),
+      padding: const EdgeInsets.fromLTRB(20, 20, 8, 20),
       child: Row(
         children: [
           Container(
             width: 52,
             height: 52,
             decoration: BoxDecoration(
-              color: HuellitasTheme.menta,
+              color: vet.activo ? HuellitasTheme.menta : HuellitasTheme.arena,
               borderRadius: BorderRadius.circular(26),
               boxShadow: HuellitasTheme.claySm,
             ),
@@ -233,6 +262,29 @@ class _VetCard extends StatelessWidget {
               ],
             ),
           ),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Switch(
+                value: vet.activo,
+                onChanged: onActivo,
+                activeThumbColor: HuellitasTheme.menta,
+              ),
+              Text(
+                vet.activo ? 'Activo' : 'Inactivo',
+                style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: HuellitasTheme.inkSoft),
+              ),
+              IconButton(
+                icon: const Icon(Icons.edit_outlined, size: 18),
+                color: HuellitasTheme.inkSoft,
+                tooltip: 'Editar',
+                onPressed: onEditar,
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -242,7 +294,10 @@ class _VetCard extends StatelessWidget {
 // ── FORMULARIO NUEVO VET ───────────────────────────────────────────────────────
 
 class _NuevoVetSheet extends StatefulWidget {
-  const _NuevoVetSheet();
+  /// Con [vet] el formulario edita a ese veterinario (sin correo ni clave,
+  /// que pertenecen a su cuenta de acceso).
+  final UsuarioModel? vet;
+  const _NuevoVetSheet({this.vet});
 
   @override
   State<_NuevoVetSheet> createState() => _NuevoVetSheetState();
@@ -275,12 +330,27 @@ class _NuevoVetSheetState extends State<_NuevoVetSheet> {
     ));
   }
 
+  bool get _editando => widget.vet != null;
+
   Future<void> _crear() async {
     if (!_formKey.currentState!.validate()) return;
     _formKey.currentState!.save();
     setState(() => _cargando = true);
 
     try {
+      if (_editando) {
+        await UsuarioRepository.actualizarVeterinario(
+          widget.vet!.uid!,
+          nombre: _nombre,
+          apellido: _apellido,
+          especialidad: _especialidad,
+        );
+        if (!mounted) return;
+        Navigator.pop(context);
+        mostrarAviso(context, 'Datos de $_nombre actualizados.');
+        return;
+      }
+
       // Crear cuenta Firebase Auth sin cerrar la sesión del admin,
       // usando una instancia secundaria de la app.
       final secondaryApp = await Firebase.initializeApp(
@@ -288,7 +358,6 @@ class _NuevoVetSheetState extends State<_NuevoVetSheet> {
         options: Firebase.app().options,
       );
 
-      String uid;
       try {
         final secondaryAuth = FirebaseAuth.instanceFor(app: secondaryApp);
         final credential =
@@ -296,34 +365,36 @@ class _NuevoVetSheetState extends State<_NuevoVetSheet> {
           email: _correo,
           password: _contrasenaCtrl.text,
         );
-        uid = credential.user!.uid;
+        final uid = credential.user!.uid;
+
+        // Guardar perfil veterinario en Firestore
+        final vet = UsuarioModel(
+          uid: uid,
+          nombre: _nombre,
+          apellido: _apellido,
+          correo: _correo,
+          rol: 'veterinario',
+          especialidad: _especialidad,
+        );
+        try {
+          await UsuarioRepository.crear(uid, vet);
+        } catch (_) {
+          // Sin perfil la cuenta no sirve (no podría entrar): se elimina
+          // para no dejar el correo ocupado.
+          await credential.user!.delete();
+          rethrow;
+        }
       } finally {
         await secondaryApp.delete();
       }
 
-      // Guardar perfil veterinario en Firestore
-      final vet = UsuarioModel(
-        uid: uid,
-        nombre: _nombre,
-        apellido: _apellido,
-        correo: _correo,
-        rol: 'veterinario',
-        especialidad: _especialidad,
-      );
-      await UsuarioRepository.crear(uid, vet);
-
       if (!mounted) return;
       Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Veterinario $_nombre creado correctamente.',
-            style: const TextStyle(fontWeight: FontWeight.w700)),
-        backgroundColor: HuellitasTheme.menta,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16)),
-      ));
+      mostrarAviso(context, 'Veterinario $_nombre creado correctamente.');
+    } on FirebaseAuthException catch (e) {
+      _mostrarError(AuthService.mensajeError(e.code));
     } catch (e) {
-      _mostrarError('Error: ${e.toString()}');
+      _mostrarError(mensajeDeError(e));
     } finally {
       if (mounted) setState(() => _cargando = false);
     }
@@ -355,10 +426,11 @@ class _NuevoVetSheetState extends State<_NuevoVetSheet> {
               ),
             ),
             const SizedBox(height: 18),
-            Text('Registrar veterinario',
+            Text(_editando ? 'Editar veterinario' : 'Registrar veterinario',
                 style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 20),
             TextFormField(
+              initialValue: widget.vet?.nombre,
               decoration: HuellitasTheme.field('Nombre'),
               textCapitalization: TextCapitalization.words,
               validator: (v) => (v == null || v.trim().isEmpty)
@@ -368,6 +440,7 @@ class _NuevoVetSheetState extends State<_NuevoVetSheet> {
             ),
             const SizedBox(height: 12),
             TextFormField(
+              initialValue: widget.vet?.apellido,
               decoration: HuellitasTheme.field('Apellido'),
               textCapitalization: TextCapitalization.words,
               validator: (v) => (v == null || v.trim().isEmpty)
@@ -377,11 +450,13 @@ class _NuevoVetSheetState extends State<_NuevoVetSheet> {
             ),
             const SizedBox(height: 12),
             TextFormField(
+              initialValue: widget.vet?.especialidad,
               decoration: HuellitasTheme.field('Especialidad',
                   hint: 'Ej: Cirugía, Dermatología'),
               textCapitalization: TextCapitalization.sentences,
               onSaved: (v) => _especialidad = v?.trim() ?? '',
             ),
+            if (!_editando) ...[
             const SizedBox(height: 12),
             TextFormField(
               decoration: HuellitasTheme.field('Correo electrónico'),
@@ -405,6 +480,7 @@ class _NuevoVetSheetState extends State<_NuevoVetSheet> {
                   ? 'Mínimo 6 caracteres'
                   : null,
             ),
+            ],
             const SizedBox(height: 24),
             ClayButton(
               child: ElevatedButton(
@@ -417,7 +493,7 @@ class _NuevoVetSheetState extends State<_NuevoVetSheet> {
                             strokeWidth: 2,
                             color: HuellitasTheme.ink),
                       )
-                    : const Text('Crear veterinario'),
+                    : Text(_editando ? 'Guardar cambios' : 'Crear veterinario'),
               ),
             ),
           ],

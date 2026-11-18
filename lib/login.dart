@@ -56,6 +56,13 @@ class _IniciarSesionPageState extends State<IniciarSesionPage> {
         return;
       }
 
+      if (usuario.rol == 'veterinario' && !usuario.activo) {
+        await AuthService.cerrarSesion();
+        _mostrarError(
+            'Tu cuenta de veterinario está desactivada. Habla con la administración.');
+        return;
+      }
+
       if (!mounted) return;
 
       if (usuario.rol == 'admin') {

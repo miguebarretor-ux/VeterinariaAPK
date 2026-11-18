@@ -4,6 +4,8 @@ import 'mascota_model.dart';
 import 'huellitas_theme.dart';
 import 'widgets.dart';
 import 'repositories/producto_repository.dart';
+import 'repositories/carrito_repository.dart';
+import 'pedidos.dart';
 
 class AdminTiendaPage extends StatefulWidget {
   const AdminTiendaPage({super.key});
@@ -16,10 +18,22 @@ class _AdminTiendaPageState extends State<AdminTiendaPage> {
   List<ProductoModel> _productos = [];
   bool _cargando = true;
   StreamSubscription<List<ProductoModel>>? _sub;
+  StreamSubscription<List<PedidoModel>>? _subPedidos;
+  int _pedidosPendientes = 0;
 
   @override
   void initState() {
     super.initState();
+    _subPedidos = CarritoRepository.streamTodosLosPedidos().listen(
+      (lista) {
+        if (mounted) {
+          setState(() => _pedidosPendientes = lista
+              .where((p) => p.estado == EstadoPedido.pendiente)
+              .length);
+        }
+      },
+      onError: (_) {},
+    );
     _sub = ProductoRepository.stream().listen(
       (lista) {
         if (mounted) setState(() { _productos = lista; _cargando = false; });
@@ -33,6 +47,7 @@ class _AdminTiendaPageState extends State<AdminTiendaPage> {
   @override
   void dispose() {
     _sub?.cancel();
+    _subPedidos?.cancel();
     super.dispose();
   }
 
@@ -90,7 +105,15 @@ class _AdminTiendaPageState extends State<AdminTiendaPage> {
 
     return Scaffold(
       backgroundColor: HuellitasTheme.arena,
-      body: _productos.isEmpty ? _emptyState(context) : _lista(context),
+      body: Column(
+        children: [
+          _accesoPedidos(context),
+          Expanded(
+            child:
+                _productos.isEmpty ? _emptyState(context) : _lista(context),
+          ),
+        ],
+      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _nuevo,
         backgroundColor: HuellitasTheme.ink,
@@ -105,8 +128,50 @@ class _AdminTiendaPageState extends State<AdminTiendaPage> {
     );
   }
 
+  /// Acceso a la bandeja de pedidos, con cuántos esperan atención.
+  Widget _accesoPedidos(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+      child: Material(
+        color: _pedidosPendientes > 0 ? HuellitasTheme.lima : HuellitasTheme.leche,
+        borderRadius: BorderRadius.circular(24),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(24),
+          onTap: () => Navigator.push(context,
+              MaterialPageRoute(builder: (_) => const PedidosPage())),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+            child: Row(
+              children: [
+                const Icon(Icons.receipt_long_outlined,
+                    color: HuellitasTheme.ink),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    _pedidosPendientes == 0
+                        ? 'Pedidos'
+                        : _pedidosPendientes == 1
+                            ? '1 pedido por atender'
+                            : '$_pedidosPendientes pedidos por atender',
+                    style: Theme.of(context).textTheme.labelLarge,
+                  ),
+                ),
+                const Icon(Icons.chevron_right_rounded,
+                    color: HuellitasTheme.ink),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _lista(BuildContext context) {
     final activos = _productos.where((p) => p.activo).length;
+    final agotados =
+        _productos.where((p) => p.estado == EstadoProducto.agotado).length;
+    final bajos =
+        _productos.where((p) => p.estado == EstadoProducto.stockBajo).length;
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 100),
       children: [
@@ -125,7 +190,12 @@ class _AdminTiendaPageState extends State<AdminTiendaPage> {
                   Text('${_productos.length}',
                       style: Theme.of(context).textTheme.displayLarge),
                   Text(
-                    '$activos activo${activos == 1 ? '' : 's'} · ${_productos.length} total',
+                    [
+                      '$activos activo${activos == 1 ? '' : 's'}',
+                      if (agotados > 0)
+                        '$agotados agotado${agotados == 1 ? '' : 's'}',
+                      if (bajos > 0) '$bajos con stock bajo',
+                    ].join(' · '),
                     style: Theme.of(context)
                         .textTheme
                         .bodyMedium
@@ -249,22 +319,22 @@ class _ProductoCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 10),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: producto.stock > 0
-                          ? HuellitasTheme.lima
-                          : HuellitasTheme.coral,
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      'Stock: ${producto.stock}',
-                      style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: HuellitasTheme.ink),
-                    ),
+                  // Estado del stock: agotado, bajo o disponible.
+                  EstadoChip(
+                    switch (producto.estado) {
+                      EstadoProducto.agotado => 'Agotado',
+                      EstadoProducto.stockBajo =>
+                        'Stock bajo: ${producto.stock}',
+                      EstadoProducto.inactivo =>
+                        'Oculto · stock ${producto.stock}',
+                      EstadoProducto.disponible => 'Stock: ${producto.stock}',
+                    },
+                    color: switch (producto.estado) {
+                      EstadoProducto.agotado => HuellitasTheme.coral,
+                      EstadoProducto.stockBajo => HuellitasTheme.lima,
+                      EstadoProducto.inactivo => HuellitasTheme.arena,
+                      EstadoProducto.disponible => HuellitasTheme.menta,
+                    },
                   ),
                 ]),
               ],

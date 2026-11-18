@@ -3,6 +3,7 @@ import 'mascota_model.dart';
 import 'huellitas_theme.dart';
 import 'login.dart';
 import 'admin_usuarios.dart';
+import 'admin_citas.dart';
 import 'admin_veterinarios.dart';
 import 'admin_servicios.dart';
 import 'admin_tienda.dart';
@@ -19,7 +20,7 @@ class AdminShell extends StatefulWidget {
 class _AdminShellState extends State<AdminShell> {
   int _tab = 0;
 
-  static const _labels = ['Usuarios', 'Veterinarios', 'Servicios', 'Tienda'];
+  static const _labels = ['Usuarios', 'Citas', 'Veterinarios', 'Servicios', 'Tienda'];
 
   void _cerrarSesion(BuildContext context) async {
     await AuthService.cerrarSesion();
@@ -36,6 +37,7 @@ class _AdminShellState extends State<AdminShell> {
   Widget build(BuildContext context) {
     const pages = [
       AdminUsuariosPage(),
+      AdminCitasPage(),
       _AdminVetsPage(),
       _AdminServiciosPage(),
       _AdminTiendaPage(),
@@ -114,6 +116,10 @@ class _AdminShellState extends State<AdminShell> {
             BottomNavigationBarItem(
               icon: Icon(Icons.people_rounded),
               label: 'Usuarios',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.event_note_rounded),
+              label: 'Citas',
             ),
             BottomNavigationBarItem(
               icon: Icon(Icons.medical_services_outlined),
